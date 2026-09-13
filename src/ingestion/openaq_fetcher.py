@@ -166,11 +166,18 @@ class OpenAQFetcher(BaseFetcher):
         mode = kwargs.pop("mode", "realtime")
         date_from, date_to = self._resolve_date_range(mode, **kwargs)
 
-        location_ids: list[int] = self.config.get("location_ids", [])
+        # Use the canonical OpenAQ mappings from stations.yaml.
+        # This avoids manually maintaining 78 location IDs.
+        location_ids: list[int] = sorted(self._location_map.keys())
+
+        if not location_ids:
+            # Backward-compatible fallback to data_sources.yaml
+            location_ids = self.config.get("location_ids", [])
+
         if not location_ids:
             raise ValueError(
-                "No location_ids configured in data_sources.yaml "
-                "→ openaq → location_ids."
+                "No OpenAQ station IDs found in stations.yaml "
+                "or data_sources.yaml."
             )
 
         log.info(
@@ -317,10 +324,9 @@ class OpenAQFetcher(BaseFetcher):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _resolve_date_range(
-        self, mode: str, **kwargs
-    ) -> tuple[datetime, datetime]:
+    def _resolve_date_range(self, mode: str, **kwargs) -> tuple[datetime, datetime]:
         """Calculate the from/to datetime window for the API query."""
+
         now_utc = datetime.now(timezone.utc)
 
         if mode == "realtime":
@@ -328,18 +334,26 @@ class OpenAQFetcher(BaseFetcher):
             return now_utc - timedelta(hours=lookback), now_utc
 
         if mode == "historical":
-            start_str = kwargs.get("start_date", self.config.get("historical_start"))
-            end_str   = kwargs.get("end_date",   self.config.get("historical_end"))
+            start_str = kwargs.get("start_date")
+            end_str = kwargs.get("end_date")
+
             if not start_str or not end_str:
                 raise ValueError(
-                    "historical mode requires start_date and end_date "
-                    "(kwargs or data_sources.yaml)"
+                    "historical mode requires start_date and end_date"
                 )
-            date_from = datetime.fromisoformat(start_str).replace(tzinfo=timezone.utc)
-            date_to   = datetime.fromisoformat(end_str).replace(tzinfo=timezone.utc)
+
+            date_from = datetime.fromisoformat(start_str).replace(
+                tzinfo=timezone.utc
+            )
+            date_to = datetime.fromisoformat(end_str).replace(
+                tzinfo=timezone.utc
+            )
+
             return date_from, date_to
 
-        raise ValueError(f"Unknown mode '{mode}'. Use 'realtime' or 'historical'.")
+        raise ValueError(
+            f"Unknown mode '{mode}'. Use 'realtime' or 'historical'."
+        )
 
     def _get_json(self, url: str, params: list[tuple] | None = None) -> dict:
         """

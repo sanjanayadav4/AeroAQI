@@ -174,23 +174,37 @@ class FeatureEngineer:
         # Only fill rows where both inputs are available
         have_both = t_surf.notna() & t_850.notna()
 
+        t_surf = pd.to_numeric(df["temperature"], errors="coerce")
+        t_850 = pd.to_numeric(df["temp_850hpa"], errors="coerce")
+
+        strength = t_850 - t_surf
+        have_both = t_surf.notna() & t_850.notna()
+
         if "inversion_strength" not in df.columns:
             df["inversion_strength"] = np.nan
+
         df.loc[have_both, "inversion_strength"] = strength[have_both]
 
+        # Create inversion flag after strength and have_both are defined
         if "inversion_flag" not in df.columns:
-            df["inversion_flag"] = pd.NA
+            df["inversion_flag"] = None
+
         df.loc[have_both, "inversion_flag"] = (
-            strength[have_both] > self._inv_thresh
+            (strength[have_both] > self._inv_thresh).to_numpy()
         )
 
-        n_inv = int(have_both.sum() and (strength[have_both] > self._inv_thresh).sum())
+        n_inv = int(
+            have_both.sum()
+            and (strength[have_both] > self._inv_thresh).sum()
+        )
+
         log.debug(
             f"[feat_eng] compute_inversion: "
-            f"{have_both.sum()} rows processed, {n_inv} inversions detected."
+            f"{have_both.sum()} rows processed, "
+            f"{n_inv} inversions detected"
         )
-        return df
 
+        return df
     def compute_temperature_profile(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Build a JSON-serialised temperature profile from pressure-level columns.

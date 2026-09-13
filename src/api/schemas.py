@@ -17,6 +17,7 @@ Design rules
 
 from __future__ import annotations
 
+import math
 import json
 from typing import Any, Optional
 
@@ -113,11 +114,11 @@ class AQIObservation(_Base):
 
 
 class ObservationsResponse(_Base):
-    count: int
+    count: int = 0
     station_id: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
-    observations: list[AQIObservation]
+    observations: list[AQIObservation] = []
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +168,8 @@ class WeatherObservation(_Base):
 
         # Parse temperature_profile JSON string → dict
         tp = row.get("temperature_profile")
+        if tp is not None and isinstance(tp, float) and math.isnan(tp):
+          tp = None 
         if isinstance(tp, str):
             try:
                 tp = json.loads(tp)
@@ -448,3 +451,28 @@ class ForecastExplanationResponse(_Base):
     inversion_detected: bool  = False
     shap_available:     bool  = False
     message:            Optional[str] = None
+
+class WRFchemForecastHour(BaseModel):
+    timestamp_utc: str
+    pm25: float
+    pm10: float
+    o3: float
+    no2: float
+    temperature_c: float
+    wind_speed_ms: float
+    boundary_layer_height_m: float
+    inversion_flag: bool
+    aqi: float
+    aqi_category: str
+
+
+class WRFchemForecastResponse(BaseModel):
+    station_id: str
+    generated_at: str
+    model: str
+    mode: str
+    model_status: str
+    latitude: float | None = None
+    longitude: float | None = None
+    forecast_hours: int
+    forecast: list[WRFchemForecastHour]

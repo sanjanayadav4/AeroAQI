@@ -100,7 +100,7 @@ class OpenMeteoFetcher(BaseFetcher):
         list[dict]  — one dict per station, containing the full
                       Open-Meteo JSON response plus injected station metadata.
         """
-        mode = kwargs.get("mode", "realtime")
+        mode = kwargs.pop("mode", "realtime")
         active_stations = [s for s in self._stations if s.get("active", True)]
 
         log.info(

@@ -5,7 +5,7 @@ stations:
   state: Delhi
   latitude: 28.8153
   longitude: 77.153
-  openaq_id: 6932
+  openaq_id: null
   agency: DPCC
   zone: North Delhi
   active: true
@@ -15,7 +15,7 @@ stations:
   state: Delhi
   latitude: 28.6469
   longitude: 77.316
-  openaq_id: 235
+  openaq_id: null
   agency: DPCC
   zone: East Delhi
   active: true
@@ -25,7 +25,7 @@ stations:
   state: Delhi
   latitude: 28.695
   longitude: 77.181
-  openaq_id: 8917
+  openaq_id: null
   agency: DPCC
   zone: North-West Delhi
   active: true
@@ -35,7 +35,7 @@ stations:
   state: Delhi
   latitude: 28.47
   longitude: 77.128
-  openaq_id: 5570
+  openaq_id: null
   agency: IMD
   zone: South Delhi
   active: true
@@ -45,7 +45,7 @@ stations:
   state: Delhi
   latitude: 28.7762
   longitude: 77.051
-  openaq_id: 8472
+  openaq_id: null
   agency: DPCC
   zone: North-West Delhi
   active: true
@@ -55,7 +55,7 @@ stations:
   state: Delhi
   latitude: 28.754
   longitude: 77.201
-  openaq_id: 5541
+  openaq_id: null
   agency: IMD
   zone: North Delhi
   active: true
@@ -65,7 +65,7 @@ stations:
   state: Delhi
   latitude: 28.551
   longitude: 77.273
-  openaq_id: 5627
+  openaq_id: null
   agency: IMD
   zone: South-East Delhi
   active: true
@@ -75,7 +75,7 @@ stations:
   state: Delhi
   latitude: 28.75
   longitude: 77.117
-  openaq_id: 5626
+  openaq_id: null
   agency: CPCB
   zone: North Delhi
   active: true
@@ -85,7 +85,7 @@ stations:
   state: Delhi
   latitude: 28.501
   longitude: 77.258
-  openaq_id: 5744
+  openaq_id: null
   agency: DPCC
   zone: South-East Delhi
   active: true
@@ -95,7 +95,7 @@ stations:
   state: Delhi
   latitude: 28.5716
   longitude: 77.0719
-  openaq_id: 6931
+  openaq_id: null
   agency: DPCC
   zone: South-West Delhi
   active: true
@@ -105,7 +105,7 @@ stations:
   state: Delhi
   latitude: 28.5562
   longitude: 77.1
-  openaq_id: 15
+  openaq_id: null
   agency: IMD
   zone: South-West Delhi
   active: true
@@ -115,7 +115,7 @@ stations:
   state: Delhi
   latitude: 28.675
   longitude: 77.321
-  openaq_id: 6359
+  openaq_id: null
   agency: CPCB
   zone: North-East Delhi
   active: true
@@ -125,7 +125,7 @@ stations:
   state: Delhi
   latitude: 28.6289
   longitude: 77.241
-  openaq_id: 5613
+  openaq_id: null
   agency: CPCB
   zone: Central Delhi
   active: true
@@ -135,7 +135,7 @@ stations:
   state: Delhi
   latitude: 28.728
   longitude: 77.162
-  openaq_id: 5761
+  openaq_id: null
   agency: DPCC
   zone: North-West Delhi
   active: true
@@ -145,7 +145,7 @@ stations:
   state: Delhi
   latitude: 28.5828
   longitude: 77.234
-  openaq_id: 5754
+  openaq_id: null
   agency: DPCC
   zone: Central Delhi
   active: true
@@ -155,7 +155,7 @@ stations:
   state: Delhi
   latitude: 28.5918
   longitude: 77.2273
-  openaq_id: 5634
+  openaq_id: null
   agency: IMD
   zone: Central Delhi
   active: true
@@ -165,7 +165,7 @@ stations:
   state: Delhi
   latitude: 28.6118
   longitude: 77.238
-  openaq_id: 6929
+  openaq_id: null
   agency: DPCC
   zone: Central Delhi
   active: true
@@ -175,7 +175,7 @@ stations:
   state: Delhi
   latitude: 28.636
   longitude: 77.202
-  openaq_id: 6358
+  openaq_id: null
   agency: DPCC
   zone: Central Delhi
   active: true
@@ -185,7 +185,7 @@ stations:
   state: Delhi
   latitude: 28.682
   longitude: 77.031
-  openaq_id: 10486
+  openaq_id: null
   agency: DPCC
   zone: West Delhi
   active: true
@@ -195,7 +195,7 @@ stations:
   state: Delhi
   latitude: 28.61
   longitude: 77.038
-  openaq_id: 5622
+  openaq_id: null
   agency: CPCB
   zone: South-West Delhi
   active: true
@@ -205,7 +205,7 @@ stations:
   state: Delhi
   latitude: 28.609
   longitude: 76.9798
-  openaq_id: 10488
+  openaq_id: null
   agency: DPCC
   zone: South-West Delhi
   active: true
@@ -215,7 +215,7 @@ stations:
   state: Delhi
   latitude: 28.852
   longitude: 77.092
-  openaq_id: 10485
+  openaq_id: null
   agency: DPCC
   zone: North Delhi
   active: true
@@ -225,7 +225,7 @@ stations:
   state: Delhi
   latitude: 28.5677
   longitude: 77.25
-  openaq_id: 8365
+  openaq_id: null
   agency: DPCC
   zone: South-East Delhi
   active: true
@@ -235,7 +235,7 @@ stations:
   state: Delhi
   latitude: 28.689
   longitude: 77.209
-  openaq_id: 5610
+  openaq_id: null
   agency: IMD
   zone: North Delhi
   active: true
@@ -245,7 +245,7 @@ stations:
   state: Delhi
   latitude: 28.535
   longitude: 77.29
-  openaq_id: 8239
+  openaq_id: null
   agency: DPCC
   zone: South-East Delhi
   active: true
@@ -255,7 +255,7 @@ stations:
   state: Delhi
   latitude: 28.623
   longitude: 77.287
-  openaq_id: 6960
+  openaq_id: null
   agency: DPCC
   zone: East Delhi
   active: true
@@ -275,7 +275,7 @@ stations:
   state: Delhi
   latitude: 28.674
   longitude: 77.131
-  openaq_id: 50
+  openaq_id: null
   agency: DPCC
   zone: West Delhi
   active: true
@@ -285,7 +285,7 @@ stations:
   state: Delhi
   latitude: 28.6396
   longitude: 77.157
-  openaq_id: 5404
+  openaq_id: null
   agency: DPCC
   zone: Central Delhi
   active: true
@@ -295,7 +295,7 @@ stations:
   state: Delhi
   latitude: 28.6396
   longitude: 77.157
-  openaq_id: 5404
+  openaq_id: null
   agency: IMD
   zone: Central Delhi
   active: true
@@ -305,7 +305,7 @@ stations:
   state: Delhi
   latitude: 28.5633
   longitude: 77.186
-  openaq_id: 17
+  openaq_id: null
   agency: DPCC
   zone: South Delhi
   active: true
@@ -315,7 +315,7 @@ stations:
   state: Delhi
   latitude: 28.7326
   longitude: 77.1198
-  openaq_id: 10831
+  openaq_id: null
   agency: DPCC
   zone: North-West Delhi
   active: true
@@ -325,7 +325,7 @@ stations:
   state: Delhi
   latitude: 28.651
   longitude: 77.158
-  openaq_id: 2503
+  openaq_id: null
   agency: CPCB
   zone: West Delhi
   active: true
@@ -335,7 +335,7 @@ stations:
   state: Delhi
   latitude: 28.55
   longitude: 77.215
-  openaq_id: 5586
+  openaq_id: null
   agency: CPCB
   zone: South Delhi
   active: true
@@ -345,7 +345,7 @@ stations:
   state: Delhi
   latitude: 28.711
   longitude: 77.249
-  openaq_id: 8475
+  openaq_id: null
   agency: DPCC
   zone: North-East Delhi
   active: true
@@ -355,7 +355,7 @@ stations:
   state: Delhi
   latitude: 28.535
   longitude: 77.193
-  openaq_id: 10484
+  openaq_id: null
   agency: DPCC
   zone: South Delhi
   active: true
@@ -365,7 +365,7 @@ stations:
   state: Delhi
   latitude: 28.672
   longitude: 77.315
-  openaq_id: 6938
+  openaq_id: null
   agency: DPCC
   zone: East Delhi
   active: true
@@ -375,7 +375,7 @@ stations:
   state: Delhi
   latitude: 28.686
   longitude: 77.165
-  openaq_id: 8915
+  openaq_id: null
   agency: DPCC
   zone: North-West Delhi
   active: true
@@ -385,7 +385,7 @@ stations:
   state: Haryana
   latitude: 28.692
   longitude: 76.931
-  openaq_id: 6936
+  openaq_id: null
   agency: HSPCB
   zone: Bahadurgarh
   active: true
@@ -395,7 +395,7 @@ stations:
   state: Haryana
   latitude: 28.34
   longitude: 77.325
-  openaq_id: 6972
+  openaq_id: null
   agency: HSPCB
   zone: Ballabgarh
   active: true
@@ -405,7 +405,7 @@ stations:
   state: Haryana
   latitude: 28.795
   longitude: 76.132
-  openaq_id: 6944
+  openaq_id: null
   agency: HSPCB
   zone: Bhiwani
   active: true
@@ -415,7 +415,7 @@ stations:
   state: Haryana
   latitude: 28.592
   longitude: 76.272
-  openaq_id: 10725
+  openaq_id: null
   agency: HSPCB
   zone: Charkhi Dadri
   active: true
@@ -425,7 +425,7 @@ stations:
   state: Haryana
   latitude: 28.206
   longitude: 76.797
-  openaq_id: 6949
+  openaq_id: null
   agency: HSPCB
   zone: Dharuhera
   active: true
@@ -435,7 +435,7 @@ stations:
   state: Haryana
   latitude: 28.395
   longitude: 77.318
-  openaq_id: 10908
+  openaq_id: null
   agency: HSPCB
   zone: Faridabad
   active: true
@@ -445,7 +445,7 @@ stations:
   state: Haryana
   latitude: 28.4089
   longitude: 77.3178
-  openaq_id: 5617
+  openaq_id: null
   agency: HSPCB
   zone: Faridabad
   active: true
@@ -455,7 +455,7 @@ stations:
   state: Haryana
   latitude: 28.4089
   longitude: 77.3178
-  openaq_id: 5617
+  openaq_id: null
   agency: HSPCB
   zone: Faridabad
   active: true
@@ -465,7 +465,7 @@ stations:
   state: Haryana
   latitude: 28.438
   longitude: 77.317
-  openaq_id: 10820
+  openaq_id: null
   agency: HSPCB
   zone: Faridabad
   active: true
@@ -475,7 +475,7 @@ stations:
   state: Haryana
   latitude: 28.394
   longitude: 77.104
-  openaq_id: 10921
+  openaq_id: null
   agency: IMD
   zone: Gurugram
   active: true
@@ -485,7 +485,7 @@ stations:
   state: Haryana
   latitude: 28.4428
   longitude: 77.0588
-  openaq_id: 10825
+  openaq_id: null
   agency: HSPCB
   zone: Gurugram
   active: true
@@ -495,7 +495,7 @@ stations:
   state: Haryana
   latitude: 28.427
   longitude: 77.103
-  openaq_id: 10900
+  openaq_id: null
   agency: HSPCB
   zone: Gurugram
   active: true
@@ -505,7 +505,7 @@ stations:
   state: Haryana
   latitude: 28.4595
   longitude: 77.0266
-  openaq_id: 301
+  openaq_id: null
   agency: HSPCB
   zone: Gurugram
   active: true
@@ -515,7 +515,7 @@ stations:
   state: Haryana
   latitude: 29.315
   longitude: 76.315
-  openaq_id: 6963
+  openaq_id: null
   agency: HSPCB
   zone: Jind
   active: true
@@ -525,7 +525,7 @@ stations:
   state: Haryana
   latitude: 29.6857
   longitude: 76.9905
-  openaq_id: 10910
+  openaq_id: null
   agency: HSPCB
   zone: Karnal
   active: true
@@ -535,7 +535,7 @@ stations:
   state: Haryana
   latitude: 27.98
   longitude: 77.01
-  openaq_id: 6947
+  openaq_id: null
   agency: HSPCB
   zone: Mandikhera
   active: true
@@ -545,7 +545,7 @@ stations:
   state: Haryana
   latitude: 28.351
   longitude: 76.937
-  openaq_id: 6953
+  openaq_id: null
   agency: HSPCB
   zone: Manesar
   active: true
@@ -555,7 +555,7 @@ stations:
   state: Haryana
   latitude: 28.044
   longitude: 76.108
-  openaq_id: 6970
+  openaq_id: null
   agency: HSPCB
   zone: Narnaul
   active: true
@@ -565,7 +565,7 @@ stations:
   state: Haryana
   latitude: 28.1487
   longitude: 77.332
-  openaq_id: 7280
+  openaq_id: null
   agency: HSPCB
   zone: Palwal
   active: true
@@ -575,7 +575,7 @@ stations:
   state: Haryana
   latitude: 29.3909
   longitude: 76.9635
-  openaq_id: 6958
+  openaq_id: null
   agency: HSPCB
   zone: Panipat
   active: true
@@ -585,7 +585,7 @@ stations:
   state: Haryana
   latitude: 28.8955
   longitude: 76.6066
-  openaq_id: 7283
+  openaq_id: null
   agency: HSPCB
   zone: Rohtak
   active: true
@@ -595,7 +595,7 @@ stations:
   state: Haryana
   latitude: 29.025
   longitude: 77.08
-  openaq_id: 6951
+  openaq_id: null
   agency: HSPCB
   zone: Sonipat
   active: true
@@ -605,7 +605,7 @@ stations:
   state: Rajasthan
   latitude: 27.553
   longitude: 76.6346
-  openaq_id: 5576
+  openaq_id: null
   agency: RSPCB
   zone: Alwar
   active: true
@@ -615,7 +615,7 @@ stations:
   state: Rajasthan
   latitude: 28.2088
   longitude: 76.8606
-  openaq_id: 5588
+  openaq_id: null
   agency: RSPCB
   zone: Bhiwadi
   active: true
@@ -625,7 +625,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.944
   longitude: 77.218
-  openaq_id: 6979
+  openaq_id: null
   agency: UPPCB
   zone: Baghpat
   active: true
@@ -635,7 +635,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.4069
   longitude: 77.8498
-  openaq_id: 6985
+  openaq_id: null
   agency: UPPCB
   zone: Bulandshahr
   active: true
@@ -645,7 +645,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.6415
   longitude: 77.3715
-  openaq_id: 6924
+  openaq_id: null
   agency: UPPCB
   zone: Ghaziabad
   active: true
@@ -655,7 +655,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.75
   longitude: 77.29
-  openaq_id: 7005
+  openaq_id: null
   agency: UPPCB
   zone: Ghaziabad
   active: true
@@ -665,7 +665,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.69
   longitude: 77.44
-  openaq_id: 10919
+  openaq_id: null
   agency: UPPCB
   zone: Ghaziabad
   active: true
@@ -675,7 +675,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.658
   longitude: 77.357
-  openaq_id: 5665
+  openaq_id: null
   agency: UPPCB
   zone: Ghaziabad
   active: true
@@ -685,7 +685,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.474
   longitude: 77.482
-  openaq_id: 6978
+  openaq_id: null
   agency: UPPCB
   zone: Greater Noida
   active: true
@@ -695,7 +695,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.455
   longitude: 77.505
-  openaq_id: 6986
+  openaq_id: null
   agency: UPPCB
   zone: Greater Noida
   active: true
@@ -705,7 +705,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.73
   longitude: 77.775
-  openaq_id: 8319
+  openaq_id: null
   agency: UPPCB
   zone: Hapur
   active: true
@@ -715,7 +715,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.981
   longitude: 77.719
-  openaq_id: 7833
+  openaq_id: null
   agency: UPPCB
   zone: Meerut
   active: true
@@ -725,7 +725,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.965
   longitude: 77.7
-  openaq_id: 6976
+  openaq_id: null
   agency: UPPCB
   zone: Meerut
   active: true
@@ -735,7 +735,7 @@ stations:
   state: Uttar Pradesh
   latitude: 29.012
   longitude: 77.678
-  openaq_id: 7720
+  openaq_id: null
   agency: UPPCB
   zone: Meerut
   active: true
@@ -745,7 +745,7 @@ stations:
   state: Uttar Pradesh
   latitude: 29.4727
   longitude: 77.7085
-  openaq_id: 6923
+  openaq_id: null
   agency: UPPCB
   zone: Muzaffarnagar
   active: true
@@ -755,7 +755,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.583
   longitude: 77.31
-  openaq_id: 6980
+  openaq_id: null
   agency: UPPCB
   zone: Noida
   active: true
@@ -765,7 +765,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.574
   longitude: 77.425
-  openaq_id: 6988
+  openaq_id: null
   agency: UPPCB
   zone: Noida
   active: true
@@ -775,7 +775,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.544
   longitude: 77.334
-  openaq_id: 5598
+  openaq_id: null
   agency: UPPCB
   zone: Noida
   active: true
@@ -785,7 +785,7 @@ stations:
   state: Uttar Pradesh
   latitude: 28.6271
   longitude: 77.3649
-  openaq_id: 5616
+  openaq_id: null
   agency: IMD
   zone: Noida
   active: true

@@ -1,17 +1,16 @@
 """
-src/api/routers/observations.py
-================================
 Air quality observation endpoints.
 
-All data comes from the 'observations' table via DBClient.read_observations().
-Only air-quality columns are returned (weather/fire columns are on separate
-endpoints for clarity and smaller payloads).
+Prototype mode:
+- Air-quality data comes from the local Delhi-NCR demo dataset.
+- 79 stations are served from src/demo/demo_stations.py.
+- Real DB/Open-Meteo ingestion remains available for future production use.
 
 Endpoints
 ---------
-GET /observations                     — paginated list with optional filters
-GET /observations/latest              — most recent reading per station
-GET /observations/{station_id}        — readings for one station
+GET /observations
+GET /observations/latest
+GET /observations/{station_id}
 """
 
 from __future__ import annotations
@@ -21,23 +20,75 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.api.dependencies import DbDep
 from src.api.schemas import AQIObservation, ObservationsResponse
+from src.demo.demo_stations import get_demo_stations, get_demo_station
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
-router = APIRouter(prefix="/observations", tags=["Air Quality"])
 
-# AQ columns to fetch — avoids pulling weather/fire columns from DB
-_AQ_COLS = [
-    "timestamp_utc", "station_id", "station_name",
-    "latitude", "longitude", "data_source",
-    "pm25", "pm10", "o3", "no2", "so2", "co",
-    "aqi_raw", "aqi_computed",
-]
+router = APIRouter(prefix="/observations", tags=["Air Quality"])
 
 _MAX_LIMIT = 1000
 _DEFAULT_HOURS = 24
+
+
+def _demo_to_observation(station: dict, timestamp: Optional[datetime] = None) -> dict:
+    """
+    Convert one demo station reading into the API observation format.
+    """
+
+    ts = timestamp or datetime.now(timezone.utc)
+
+    return {
+        "timestamp_utc": ts,
+        "station_id": station["station_id"],
+        "station_name": station["name"],
+        "latitude": station["latitude"],
+        "longitude": station["longitude"],
+        "data_source": "Prototype Simulation",
+
+        "pm25": station.get("pm25"),
+        "pm10": station.get("pm10"),
+        "o3": station.get("o3"),
+        "no2": station.get("no2"),
+        "so2": station.get("so2"),
+        "co": station.get("co"),
+
+        "aqi_raw": station.get("aqi"),
+        "aqi_computed": station.get("aqi"),
+
+    }
+
+
+def _make_demo_records(
+    stations: list[dict],
+    start_dt: datetime,
+    end_dt: datetime,
+) -> list[AQIObservation]:
+    """
+    Create prototype observation records.
+
+    Each station currently has one representative reading.
+    """
+
+    now = datetime.now(timezone.utc)
+
+    # Keep timestamp inside requested window.
+    timestamp = min(max(now, start_dt), end_dt)
+
+    records = []
+
+    for station in stations:
+        row = _demo_to_observation(
+            station,
+            timestamp=timestamp,
+        )
+
+        records.append(
+            AQIObservation.from_db_row(row)
+        )
+
+    return records
 
 
 @router.get(
@@ -45,48 +96,68 @@ _DEFAULT_HOURS = 24
     response_model=ObservationsResponse,
     summary="List air quality observations",
     description=(
-        "Returns hourly air quality observations for Delhi NCR stations. "
-        "Defaults to the last 24 hours for all stations. "
-        "Filter by station, time range, and/or limit the number of rows."
+        "Returns prototype air-quality observations for the "
+        "79 Delhi-NCR stations from the local simulation dataset."
     ),
 )
 def list_observations(
-    db: DbDep,
     station_id: Optional[str] = Query(
-        None, description="Filter to a specific station ID, e.g. 'DEL_ITO'"
+        None,
+        description="Filter to a specific station ID, e.g. 'DEL_ITO'",
     ),
     start_time: Optional[str] = Query(
         None,
-        description="UTC start datetime (ISO 8601), e.g. '2023-10-01T00:00:00'",
+        description="UTC start datetime (ISO 8601)",
     ),
     end_time: Optional[str] = Query(
         None,
-        description="UTC end datetime (ISO 8601), e.g. '2023-10-31T23:59:59'",
+        description="UTC end datetime (ISO 8601)",
     ),
     hours: Optional[int] = Query(
         None,
-        ge=1, le=720,
-        description="Look-back window in hours (used when start_time is omitted). Default 24.",
+        ge=1,
+        le=720,
+        description="Look-back window in hours. Default 24.",
     ),
     limit: int = Query(
-        200, ge=1, le=_MAX_LIMIT,
+        200,
+        ge=1,
+        le=_MAX_LIMIT,
         description=f"Maximum rows to return (max {_MAX_LIMIT}).",
     ),
 ) -> ObservationsResponse:
-    start_dt, end_dt = _resolve_time_range(start_time, end_time, hours or _DEFAULT_HOURS)
 
-    df = db.read_observations(
-        station_id=station_id,
-        start_time=start_dt,
-        end_time=end_dt,
-        # No columns filter — let DB return all; schema filters on serialisation
+    start_dt, end_dt = _resolve_time_range(
+        start_time,
+        end_time,
+        hours or _DEFAULT_HOURS,
     )
 
-    # Apply row limit (DB query already orders by timestamp ASC)
-    if len(df) > limit:
-        df = df.tail(limit)
+    stations = get_demo_stations()
 
-    records = [AQIObservation.from_db_row(row) for row in df.to_dict(orient="records")]
+    if station_id:
+      stations = [
+        s
+        for s in stations
+        if s["station_id"].upper() == station_id.upper()
+    ]
+
+    if len(stations) == 0:
+        return ObservationsResponse(
+            count=0,
+            station_id=station_id,
+            start_time=start_dt.isoformat(),
+            end_time=end_dt.isoformat(),
+            observations=[],
+        )
+
+    records = _make_demo_records(
+        stations,
+        start_dt,
+        end_dt,
+    )
+
+    records = records[:limit]
 
     return ObservationsResponse(
         count=len(records),
@@ -102,33 +173,27 @@ def list_observations(
     response_model=ObservationsResponse,
     summary="Latest AQI reading per station",
     description=(
-        "Returns the single most recent air quality reading for every "
-        "Delhi NCR station that has data in the database. "
-        "Useful for showing a live AQI map."
+        "Returns the latest simulated air-quality reading "
+        "for all 79 Delhi-NCR stations."
     ),
 )
-def latest_observations(db: DbDep) -> ObservationsResponse:
-    """Return the most recent observation row for every station."""
-    # Fetch last 48 h so we have data even if ingestion hasn't run recently
+def latest_observations() -> ObservationsResponse:
+
+    stations = get_demo_stations()
+
     end_dt = datetime.now(timezone.utc)
-    start_dt = end_dt - timedelta(hours=48)
+    start_dt = end_dt - timedelta(hours=1)
 
-    df = db.read_observations(start_time=start_dt, end_time=end_dt)
+    records = _make_demo_records(
+        stations,
+        start_dt,
+        end_dt,
+    )
 
-    if df.empty:
-        return ObservationsResponse(count=0, observations=[])
-
-    # Keep only the latest row per station
-    import pandas as pd
-    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True, errors="coerce")
-    df = df.dropna(subset=["timestamp_utc"])
-    latest = df.sort_values("timestamp_utc").groupby("station_id").tail(1)
-
-    records = [
-        AQIObservation.from_db_row(row)
-        for row in latest.to_dict(orient="records")
-    ]
-    return ObservationsResponse(count=len(records), observations=records)
+    return ObservationsResponse(
+        count=len(records),
+        observations=records,
+    )
 
 
 @router.get(
@@ -136,91 +201,113 @@ def latest_observations(db: DbDep) -> ObservationsResponse:
     response_model=ObservationsResponse,
     summary="Air quality history for one station",
     description=(
-        "Returns hourly AQI readings for a specific station. "
-        "Defaults to the last 24 hours. "
-        "Returns 404 if the station ID is unknown."
+        "Returns the prototype air-quality reading "
+        "for a specific Delhi-NCR station."
     ),
 )
 def station_observations(
     station_id: str,
-    db: DbDep,
-    start_time: Optional[str] = Query(None, description="UTC start (ISO 8601)"),
-    end_time: Optional[str] = Query(None, description="UTC end (ISO 8601)"),
-    hours: Optional[int] = Query(
-        None, ge=1, le=720,
-        description="Look-back window in hours. Default 24."
+    start_time: Optional[str] = Query(
+        None,
+        description="UTC start (ISO 8601)",
     ),
-    limit: int = Query(200, ge=1, le=_MAX_LIMIT),
+    end_time: Optional[str] = Query(
+        None,
+        description="UTC end (ISO 8601)",
+    ),
+    hours: Optional[int] = Query(
+        None,
+        ge=1,
+        le=720,
+        description="Look-back window in hours. Default 24.",
+    ),
+    limit: int = Query(
+        200,
+        ge=1,
+        le=_MAX_LIMIT,
+    ),
 ) -> ObservationsResponse:
-    start_dt, end_dt = _resolve_time_range(start_time, end_time, hours or _DEFAULT_HOURS)
 
-    df = db.read_observations(
-        station_id=station_id,
-        start_time=start_dt,
-        end_time=end_dt,
+    start_dt, end_dt = _resolve_time_range(
+        start_time,
+        end_time,
+        hours or _DEFAULT_HOURS,
     )
 
-    if df.empty:
-        # Distinguish "station not in config" vs "station has no data yet"
-        from src.utils.config_loader import load_stations
-        known_ids = {s["station_id"] for s in load_stations()}
-        if station_id not in known_ids:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Station '{station_id}' not found. Use GET /stations for valid IDs.",
-            )
-        # Station exists but has no data in the requested window
-        return ObservationsResponse(
-            count=0,
-            station_id=station_id,
-            start_time=start_dt.isoformat(),
-            end_time=end_dt.isoformat(),
-            observations=[],
+    station = get_demo_station(station_id)
+
+    if station is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Station '{station_id}' not found. "
+                "Use GET /stations for valid IDs."
+            ),
         )
 
-    if len(df) > limit:
-        df = df.tail(limit)
+    records = _make_demo_records(
+        [station],
+        start_dt,
+        end_dt,
+    )
 
-    records = [AQIObservation.from_db_row(row) for row in df.to_dict(orient="records")]
+    records = records[:limit]
+
     return ObservationsResponse(
         count=len(records),
-        station_id=station_id,
+        station_id=station["station_id"],
         start_time=start_dt.isoformat(),
         end_time=end_dt.isoformat(),
         observations=records,
     )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _resolve_time_range(
     start_str: Optional[str],
     end_str: Optional[str],
     default_lookback_hours: int,
 ) -> tuple[datetime, datetime]:
-    """Parse optional ISO strings; fall back to now − N hours."""
+    """Parse optional ISO strings; fall back to now - N hours."""
+
     now = datetime.now(timezone.utc)
+
     try:
-        end_dt = (
-            datetime.fromisoformat(end_str).replace(tzinfo=timezone.utc)
-            if end_str
-            else now
-        )
-        start_dt = (
-            datetime.fromisoformat(start_str).replace(tzinfo=timezone.utc)
-            if start_str
-            else now - timedelta(hours=default_lookback_hours)
-        )
+        if end_str:
+            end_dt = datetime.fromisoformat(end_str)
+
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            else:
+                end_dt = end_dt.astimezone(timezone.utc)
+        else:
+            end_dt = now
+
+        if start_str:
+            start_dt = datetime.fromisoformat(start_str)
+
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            else:
+                start_dt = start_dt.astimezone(timezone.utc)
+        else:
+            start_dt = end_dt - timedelta(
+                hours=default_lookback_hours
+            )
+
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid datetime format: {exc}. Use ISO 8601, e.g. '2023-10-01T00:00:00'.",
+            detail=(
+                f"Invalid datetime format: {exc}. "
+                "Use ISO 8601, e.g. "
+                "'2026-09-12T00:00:00'."
+            ),
         )
+
     if start_dt >= end_dt:
         raise HTTPException(
             status_code=422,
             detail="start_time must be earlier than end_time.",
         )
+
     return start_dt, end_dt

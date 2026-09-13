@@ -4,7 +4,7 @@ tests/integration/test_api_stations.py
 Integration tests for GET /stations and GET /stations/{station_id}.
 
 Station data comes from config/stations.yaml (no DB dependency).
-All 15 stations are expected to be present and active.
+All 79 stations are expected to be present and active.
 
 Run with:
     pytest tests/integration/test_api_stations.py -v
@@ -19,10 +19,10 @@ class TestListStations:
         resp = client.get("/stations")
         assert resp.status_code == 200
 
-    def test_returns_all_15_stations(self, client):
+    def test_returns_all_79_stations(self, client):
         body = client.get("/stations").json()
-        assert body["count"] == 15
-        assert len(body["stations"]) == 15
+        assert body["count"] == 79
+        assert len(body["stations"]) == 79
 
     def test_response_has_count_and_stations_keys(self, client):
         body = client.get("/stations").json()
@@ -62,7 +62,7 @@ class TestListStations:
 
     def test_agencies_are_known_values(self, client):
         body = client.get("/stations").json()
-        known = {"DPCC", "UPPCB", "HSPCB"}
+        known = {"DPCC", "HSPCB", "UPPCB" , "CPCB" , "IMD" , "RSPCB"}
         for s in body["stations"]:
             assert s["agency"] in known, f"Unknown agency: {s['agency']}"
 
@@ -82,7 +82,7 @@ class TestGetSingleStation:
         assert body["station_id"] == "DEL_ITO"
         assert body["name"] == "ITO"
         assert body["city"] == "Delhi"
-        assert body["agency"] == "DPCC"
+        assert body["agency"] == "CPCB"
 
     def test_valid_station_has_coordinates(self, client):
         body = client.get("/stations/DEL_ITO").json()
@@ -90,14 +90,14 @@ class TestGetSingleStation:
         assert abs(body["longitude"] - 77.2412) < 0.001
 
     def test_noida_station(self, client):
-        body = client.get("/stations/NOI_SECTOR62").json()
-        assert body["station_id"] == "NOI_SECTOR62"
+        body = client.get("/stations/UP_NOIDA_SEC62").json()
+        assert body["station_id"] == "UP_NOIDA_SEC62"
         assert body["city"] == "Noida"
         assert body["state"] == "Uttar Pradesh"
 
     def test_faridabad_station(self, client):
-        body = client.get("/stations/FBD_SECTOR16A").json()
-        assert body["station_id"] == "FBD_SECTOR16A"
+        body = client.get("/stations/HR_FARIDABAD_16A").json()
+        assert body["station_id"] == "HR_FARIDABAD_16A"
         assert body["agency"] == "HSPCB"
 
     def test_unknown_station_returns_404(self, client):
@@ -109,7 +109,7 @@ class TestGetSingleStation:
         assert "detail" in body
         assert "DOES_NOT_EXIST" in body["detail"]
 
-    def test_all_15_stations_are_individually_accessible(self, client):
+    def test_all__stations_are_individually_accessible(self, client):
         """Each station listed by /stations should be fetchable by /stations/{id}."""
         stations_list = client.get("/stations").json()["stations"]
         for s in stations_list:

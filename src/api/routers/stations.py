@@ -1,57 +1,68 @@
 """
 src/api/routers/stations.py
-============================
+
 Station/location endpoints.
 
-Data source: config/stations.yaml (loaded at startup, cached in memory).
-No DB query is needed — station metadata is static config.
+Data source:
+    Local Delhi-NCR prototype dataset from src/demo/demo_stations.py
 
-Endpoints
----------
-GET /stations                — list all 15 Delhi NCR monitoring stations
-GET /stations/{station_id}   — single station by ID
+The prototype uses a fixed local station dataset so the application
+does not depend on external AQI APIs during the SIH demonstration.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from src.api.dependencies import StationsDep
 from src.api.schemas import StationResponse, StationsListResponse
+from src.demo.demo_stations import get_demo_stations
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
 router = APIRouter(prefix="/stations", tags=["Stations"])
 
 
 @router.get(
     "",
     response_model=StationsListResponse,
-    summary="List all monitoring stations",
+    summary="List all Delhi-NCR monitoring stations",
     description=(
-        "Returns all 15 Delhi NCR CAAQMS monitoring stations with their "
-        "coordinates, operating agency, directional zone, and OpenAQ ID."
+        "Returns the local Delhi-NCR prototype monitoring station dataset "
+        "with coordinates, operating agency, zone and station metadata."
     ),
 )
-def list_stations(stations: StationsDep) -> StationsListResponse:
-    """Return all monitoring stations from config/stations.yaml."""
-    active = [s for s in stations if s.get("active", True)]
+def list_stations() -> StationsListResponse:
+    """Return all active Delhi-NCR prototype monitoring stations."""
+
+    stations = get_demo_stations()
+
+    active = [
+        station
+        for station in stations
+        if station.get("active", True)
+    ]
+
     response_items = [
         StationResponse(
-            station_id=s["station_id"],
-            name=s["name"],
-            city=s["city"],
-            state=s["state"],
-            latitude=s["latitude"],
-            longitude=s["longitude"],
-            agency=s["agency"],
-            zone=s["zone"],
-            active=s.get("active", True),
-            openaq_id=s.get("openaq_id"),
+            station_id=station["station_id"],
+            name=station["name"],
+            city=station["city"],
+            state=station["state"],
+            latitude=station["latitude"],
+            longitude=station["longitude"],
+            agency=station["agency"],
+            zone=station["zone"],
+            active=station.get("active", True),
+            openaq_id=station.get("openaq_id"),
         )
-        for s in active
+        for station in active
     ]
-    return StationsListResponse(count=len(response_items), stations=response_items)
+
+    return StationsListResponse(
+        count=len(response_items),
+        stations=response_items,
+    )
 
 
 @router.get(
@@ -59,24 +70,32 @@ def list_stations(stations: StationsDep) -> StationsListResponse:
     response_model=StationResponse,
     summary="Get a single station by ID",
     description=(
-        "Returns metadata for one monitoring station. "
-        "Station IDs are like 'DEL_ITO', 'DEL_ANAND_VIHAR', 'NOI_SECTOR62', etc. "
-        "Returns 404 if the station ID is not found."
+        "Returns metadata for one Delhi-NCR prototype monitoring station."
     ),
 )
-def get_station(station_id: str, stations: StationsDep) -> StationResponse:
+def get_station(station_id: str) -> StationResponse:
     """Return one station by its station_id."""
+
+    stations = get_demo_stations()
+
     match = next(
-        (s for s in stations if s["station_id"] == station_id), None
+        (
+            station
+            for station in stations
+            if station["station_id"] == station_id
+        ),
+        None,
     )
+
     if match is None:
         raise HTTPException(
             status_code=404,
             detail=(
                 f"Station '{station_id}' not found. "
-                f"Use GET /stations to see all valid station IDs."
+                "Use GET /stations to see all valid station IDs."
             ),
         )
+
     return StationResponse(
         station_id=match["station_id"],
         name=match["name"],

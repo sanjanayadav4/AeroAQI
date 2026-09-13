@@ -44,3 +44,8 @@ dist/
 build/
 *.egg-info/
 frontend/node_modules/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example

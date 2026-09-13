@@ -1,0 +1,804 @@
+stations:
+- station_id: DEL_ALIPUR
+  name: Alipur
+  city: Delhi
+  state: Delhi
+  latitude: 28.8153
+  longitude: 77.153
+  openaq_id: null
+  agency: DPCC
+  zone: North Delhi
+  active: true
+- station_id: DEL_ANAND_VIHAR
+  name: Anand Vihar
+  city: Delhi
+  state: Delhi
+  latitude: 28.6469
+  longitude: 77.316
+  openaq_id: null
+  agency: DPCC
+  zone: East Delhi
+  active: true
+- station_id: DEL_ASHOK_VIHAR
+  name: Ashok Vihar
+  city: Delhi
+  state: Delhi
+  latitude: 28.695
+  longitude: 77.181
+  openaq_id: null
+  agency: DPCC
+  zone: North-West Delhi
+  active: true
+- station_id: DEL_AYA_NAGAR
+  name: Aya Nagar
+  city: Delhi
+  state: Delhi
+  latitude: 28.47
+  longitude: 77.128
+  openaq_id: null
+  agency: IMD
+  zone: South Delhi
+  active: true
+- station_id: DEL_BAWANA
+  name: Bawana
+  city: Delhi
+  state: Delhi
+  latitude: 28.7762
+  longitude: 77.051
+  openaq_id: null
+  agency: DPCC
+  zone: North-West Delhi
+  active: true
+- station_id: DEL_BURARI_CROSSING
+  name: Burari Crossing
+  city: Delhi
+  state: Delhi
+  latitude: 28.754
+  longitude: 77.201
+  openaq_id: null
+  agency: IMD
+  zone: North Delhi
+  active: true
+- station_id: DEL_CRRI_MATHURA
+  name: CRRI Mathura Road
+  city: Delhi
+  state: Delhi
+  latitude: 28.551
+  longitude: 77.273
+  openaq_id: null
+  agency: IMD
+  zone: South-East Delhi
+  active: true
+- station_id: DEL_DTU
+  name: DTU
+  city: Delhi
+  state: Delhi
+  latitude: 28.75
+  longitude: 77.117
+  openaq_id: null
+  agency: CPCB
+  zone: North Delhi
+  active: true
+- station_id: DEL_KARNI_SINGH
+  name: Dr. Karni Singh Shooting Range
+  city: Delhi
+  state: Delhi
+  latitude: 28.501
+  longitude: 77.258
+  openaq_id: null
+  agency: DPCC
+  zone: South-East Delhi
+  active: true
+- station_id: DEL_DWARKA_SEC8
+  name: Dwarka Sector 8
+  city: Delhi
+  state: Delhi
+  latitude: 28.5716
+  longitude: 77.0719
+  openaq_id: null
+  agency: DPCC
+  zone: South-West Delhi
+  active: true
+- station_id: DEL_IGI_T3
+  name: IGI Airport Terminal 3
+  city: Delhi
+  state: Delhi
+  latitude: 28.5562
+  longitude: 77.1
+  openaq_id: null
+  agency: IMD
+  zone: South-West Delhi
+  active: true
+- station_id: DEL_IHBAS
+  name: IHBAS, Dilshad Garden
+  city: Delhi
+  state: Delhi
+  latitude: 28.675
+  longitude: 77.321
+  openaq_id: null
+  agency: CPCB
+  zone: North-East Delhi
+  active: true
+- station_id: DEL_ITO
+  name: ITO
+  city: Delhi
+  state: Delhi
+  latitude: 28.6289
+  longitude: 77.241
+  openaq_id: null
+  agency: CPCB
+  zone: Central Delhi
+  active: true
+- station_id: DEL_JAHANGIRPURI
+  name: Jahangirpuri
+  city: Delhi
+  state: Delhi
+  latitude: 28.728
+  longitude: 77.162
+  openaq_id: null
+  agency: DPCC
+  zone: North-West Delhi
+  active: true
+- station_id: DEL_JLN_STADIUM
+  name: Jawaharlal Nehru Stadium
+  city: Delhi
+  state: Delhi
+  latitude: 28.5828
+  longitude: 77.234
+  openaq_id: null
+  agency: DPCC
+  zone: Central Delhi
+  active: true
+- station_id: DEL_LODHI_ROAD
+  name: Lodhi Road
+  city: Delhi
+  state: Delhi
+  latitude: 28.5918
+  longitude: 77.2273
+  openaq_id: null
+  agency: IMD
+  zone: Central Delhi
+  active: true
+- station_id: DEL_NATIONAL_STADIUM
+  name: Major Dhyan Chand National Stadium
+  city: Delhi
+  state: Delhi
+  latitude: 28.6118
+  longitude: 77.238
+  openaq_id: null
+  agency: DPCC
+  zone: Central Delhi
+  active: true
+- station_id: DEL_MANDIR_MARG
+  name: Mandir Marg
+  city: Delhi
+  state: Delhi
+  latitude: 28.636
+  longitude: 77.202
+  openaq_id: null
+  agency: DPCC
+  zone: Central Delhi
+  active: true
+- station_id: DEL_MUNDKA
+  name: Mundaka
+  city: Delhi
+  state: Delhi
+  latitude: 28.682
+  longitude: 77.031
+  openaq_id: null
+  agency: DPCC
+  zone: West Delhi
+  active: true
+- station_id: DEL_NSIT_DWARKA
+  name: NSIT Dwarka
+  city: Delhi
+  state: Delhi
+  latitude: 28.61
+  longitude: 77.038
+  openaq_id: null
+  agency: CPCB
+  zone: South-West Delhi
+  active: true
+- station_id: DEL_NAJAFGARH
+  name: Najafgarh
+  city: Delhi
+  state: Delhi
+  latitude: 28.609
+  longitude: 76.9798
+  openaq_id: null
+  agency: DPCC
+  zone: South-West Delhi
+  active: true
+- station_id: DEL_NARELA
+  name: Narela
+  city: Delhi
+  state: Delhi
+  latitude: 28.852
+  longitude: 77.092
+  openaq_id: null
+  agency: DPCC
+  zone: North Delhi
+  active: true
+- station_id: DEL_NEHRU_NAGAR
+  name: Nehru Nagar
+  city: Delhi
+  state: Delhi
+  latitude: 28.5677
+  longitude: 77.25
+  openaq_id: null
+  agency: DPCC
+  zone: South-East Delhi
+  active: true
+- station_id: DEL_NORTH_CAMPUS
+  name: North Campus DU
+  city: Delhi
+  state: Delhi
+  latitude: 28.689
+  longitude: 77.209
+  openaq_id: null
+  agency: IMD
+  zone: North Delhi
+  active: true
+- station_id: DEL_OKHLA_PHASE2
+  name: Okhla Phase 2
+  city: Delhi
+  state: Delhi
+  latitude: 28.535
+  longitude: 77.29
+  openaq_id: null
+  agency: DPCC
+  zone: South-East Delhi
+  active: true
+- station_id: DEL_PATPARGANJ
+  name: Patparganj
+  city: Delhi
+  state: Delhi
+  latitude: 28.623
+  longitude: 77.287
+  openaq_id: null
+  agency: DPCC
+  zone: East Delhi
+  active: true
+- station_id: DEL_PITAMPURA
+  name: Pitampura
+  city: Delhi
+  state: Delhi
+  latitude: 28.703
+  longitude: 77.132
+  openaq_id: null
+  agency: IMD
+  zone: North-West Delhi
+  active: true
+- station_id: DEL_PUNJABI_BAGH
+  name: Punjabi Bagh
+  city: Delhi
+  state: Delhi
+  latitude: 28.674
+  longitude: 77.131
+  openaq_id: null
+  agency: DPCC
+  zone: West Delhi
+  active: true
+- station_id: DEL_PUSA_DPCC
+  name: Pusa
+  city: Delhi
+  state: Delhi
+  latitude: 28.6396
+  longitude: 77.157
+  openaq_id: null
+  agency: DPCC
+  zone: Central Delhi
+  active: true
+- station_id: DEL_PUSA_IMD
+  name: Pusa
+  city: Delhi
+  state: Delhi
+  latitude: 28.6396
+  longitude: 77.157
+  openaq_id: null
+  agency: IMD
+  zone: Central Delhi
+  active: true
+- station_id: DEL_RK_PURAM
+  name: R.K. Puram
+  city: Delhi
+  state: Delhi
+  latitude: 28.5633
+  longitude: 77.186
+  openaq_id: null
+  agency: DPCC
+  zone: South Delhi
+  active: true
+- station_id: DEL_ROHINI
+  name: Rohini
+  city: Delhi
+  state: Delhi
+  latitude: 28.7326
+  longitude: 77.1198
+  openaq_id: null
+  agency: DPCC
+  zone: North-West Delhi
+  active: true
+- station_id: DEL_SHADIPUR
+  name: Shadipur
+  city: Delhi
+  state: Delhi
+  latitude: 28.651
+  longitude: 77.158
+  openaq_id: null
+  agency: CPCB
+  zone: West Delhi
+  active: true
+- station_id: DEL_SIRI_FORT
+  name: Siri Fort
+  city: Delhi
+  state: Delhi
+  latitude: 28.55
+  longitude: 77.215
+  openaq_id: null
+  agency: CPCB
+  zone: South Delhi
+  active: true
+- station_id: DEL_SONIA_VIHAR
+  name: Sonia Vihar
+  city: Delhi
+  state: Delhi
+  latitude: 28.711
+  longitude: 77.249
+  openaq_id: null
+  agency: DPCC
+  zone: North-East Delhi
+  active: true
+- station_id: DEL_SRI_AUROBINDO
+  name: Sri Aurobindo Marg
+  city: Delhi
+  state: Delhi
+  latitude: 28.535
+  longitude: 77.193
+  openaq_id: null
+  agency: DPCC
+  zone: South Delhi
+  active: true
+- station_id: DEL_VIVEK_VIHAR
+  name: Vivek Vihar
+  city: Delhi
+  state: Delhi
+  latitude: 28.672
+  longitude: 77.315
+  openaq_id: null
+  agency: DPCC
+  zone: East Delhi
+  active: true
+- station_id: DEL_WAZIRPUR
+  name: Wazirpur
+  city: Delhi
+  state: Delhi
+  latitude: 28.686
+  longitude: 77.165
+  openaq_id: null
+  agency: DPCC
+  zone: North-West Delhi
+  active: true
+- station_id: HR_BAHADURGARH
+  name: Arya Nagar
+  city: Bahadurgarh
+  state: Haryana
+  latitude: 28.692
+  longitude: 76.931
+  openaq_id: null
+  agency: HSPCB
+  zone: Bahadurgarh
+  active: true
+- station_id: HR_BALLABGARH
+  name: Nathu Colony
+  city: Ballabgarh
+  state: Haryana
+  latitude: 28.34
+  longitude: 77.325
+  openaq_id: null
+  agency: HSPCB
+  zone: Ballabgarh
+  active: true
+- station_id: HR_BHIWANI
+  name: H.B. Colony
+  city: Bhiwani
+  state: Haryana
+  latitude: 28.795
+  longitude: 76.132
+  openaq_id: null
+  agency: HSPCB
+  zone: Bhiwani
+  active: true
+- station_id: HR_CHARKHI_DADRI
+  name: Mini Secretariat
+  city: Charkhi Dadri
+  state: Haryana
+  latitude: 28.592
+  longitude: 76.272
+  openaq_id: null
+  agency: HSPCB
+  zone: Charkhi Dadri
+  active: true
+- station_id: HR_DHARUHERA
+  name: Municipal Corporation Office
+  city: Dharuhera
+  state: Haryana
+  latitude: 28.206
+  longitude: 76.797
+  openaq_id: null
+  agency: HSPCB
+  zone: Dharuhera
+  active: true
+- station_id: HR_FARIDABAD_11
+  name: Sector 11
+  city: Faridabad
+  state: Haryana
+  latitude: 28.395
+  longitude: 77.318
+  openaq_id: null
+  agency: HSPCB
+  zone: Faridabad
+  active: true
+- station_id: HR_FARIDABAD_16A
+  name: Sector 16A
+  city: Faridabad
+  state: Haryana
+  latitude: 28.4089
+  longitude: 77.3178
+  openaq_id: null
+  agency: HSPCB
+  zone: Faridabad
+  active: true
+- station_id: HR_FARIDABAD_16A_2
+  name: Sector 16A
+  city: Faridabad
+  state: Haryana
+  latitude: 28.4089
+  longitude: 77.3178
+  openaq_id: null
+  agency: HSPCB
+  zone: Faridabad
+  active: true
+- station_id: HR_FARIDABAD_30
+  name: Sector 30
+  city: Faridabad
+  state: Haryana
+  latitude: 28.438
+  longitude: 77.317
+  openaq_id: null
+  agency: HSPCB
+  zone: Faridabad
+  active: true
+- station_id: HR_GWAL_PAHARI
+  name: NISE Gwal Pahari
+  city: Gurugram
+  state: Haryana
+  latitude: 28.394
+  longitude: 77.104
+  openaq_id: null
+  agency: IMD
+  zone: Gurugram
+  active: true
+- station_id: HR_GURUGRAM_51
+  name: Sector 51
+  city: Gurugram
+  state: Haryana
+  latitude: 28.4428
+  longitude: 77.0588
+  openaq_id: null
+  agency: HSPCB
+  zone: Gurugram
+  active: true
+- station_id: HR_GURUGRAM_TERI
+  name: Teri Gram
+  city: Gurugram
+  state: Haryana
+  latitude: 28.427
+  longitude: 77.103
+  openaq_id: null
+  agency: HSPCB
+  zone: Gurugram
+  active: true
+- station_id: HR_GURUGRAM_VIKAS
+  name: Vikas Sadan
+  city: Gurugram
+  state: Haryana
+  latitude: 28.4595
+  longitude: 77.0266
+  openaq_id: null
+  agency: HSPCB
+  zone: Gurugram
+  active: true
+- station_id: HR_JIND
+  name: Police Lines
+  city: Jind
+  state: Haryana
+  latitude: 29.315
+  longitude: 76.315
+  openaq_id: null
+  agency: HSPCB
+  zone: Jind
+  active: true
+- station_id: HR_KARNAL
+  name: Sector 12
+  city: Karnal
+  state: Haryana
+  latitude: 29.6857
+  longitude: 76.9905
+  openaq_id: null
+  agency: HSPCB
+  zone: Karnal
+  active: true
+- station_id: HR_MANDIKHERA
+  name: Sector 7
+  city: Mandikhera
+  state: Haryana
+  latitude: 27.98
+  longitude: 77.01
+  openaq_id: null
+  agency: HSPCB
+  zone: Mandikhera
+  active: true
+- station_id: HR_MANESAR
+  name: Sector 2 IMT
+  city: Manesar
+  state: Haryana
+  latitude: 28.351
+  longitude: 76.937
+  openaq_id: null
+  agency: HSPCB
+  zone: Manesar
+  active: true
+- station_id: HR_NARNAUL
+  name: Shastri Nagar
+  city: Narnaul
+  state: Haryana
+  latitude: 28.044
+  longitude: 76.108
+  openaq_id: null
+  agency: HSPCB
+  zone: Narnaul
+  active: true
+- station_id: HR_PALWAL
+  name: Shyam Nagar
+  city: Palwal
+  state: Haryana
+  latitude: 28.1487
+  longitude: 77.332
+  openaq_id: null
+  agency: HSPCB
+  zone: Palwal
+  active: true
+- station_id: HR_PANIPAT
+  name: Sector 18
+  city: Panipat
+  state: Haryana
+  latitude: 29.3909
+  longitude: 76.9635
+  openaq_id: null
+  agency: HSPCB
+  zone: Panipat
+  active: true
+- station_id: HR_ROHTAK
+  name: MD University
+  city: Rohtak
+  state: Haryana
+  latitude: 28.8955
+  longitude: 76.6066
+  openaq_id: null
+  agency: HSPCB
+  zone: Rohtak
+  active: true
+- station_id: HR_SONIPAT
+  name: Murthal
+  city: Sonipat
+  state: Haryana
+  latitude: 29.025
+  longitude: 77.08
+  openaq_id: null
+  agency: HSPCB
+  zone: Sonipat
+  active: true
+- station_id: RJ_ALWAR
+  name: Moti Doongri
+  city: Alwar
+  state: Rajasthan
+  latitude: 27.553
+  longitude: 76.6346
+  openaq_id: null
+  agency: RSPCB
+  zone: Alwar
+  active: true
+- station_id: RJ_BHIWADI
+  name: RIICO Industrial Area III
+  city: Bhiwadi
+  state: Rajasthan
+  latitude: 28.2088
+  longitude: 76.8606
+  openaq_id: null
+  agency: RSPCB
+  zone: Bhiwadi
+  active: true
+- station_id: UP_BAGHPAT
+  name: New Collectorate
+  city: Baghpat
+  state: Uttar Pradesh
+  latitude: 28.944
+  longitude: 77.218
+  openaq_id: null
+  agency: UPPCB
+  zone: Baghpat
+  active: true
+- station_id: UP_BULANDSHAHR
+  name: Yamuna Puram
+  city: Bulandshahr
+  state: Uttar Pradesh
+  latitude: 28.4069
+  longitude: 77.8498
+  openaq_id: null
+  agency: UPPCB
+  zone: Bulandshahr
+  active: true
+- station_id: UP_GHAZIABAD_INDIRAPURAM
+  name: Indirapuram
+  city: Ghaziabad
+  state: Uttar Pradesh
+  latitude: 28.6415
+  longitude: 77.3715
+  openaq_id: null
+  agency: UPPCB
+  zone: Ghaziabad
+  active: true
+- station_id: UP_GHAZIABAD_LONI
+  name: Loni
+  city: Ghaziabad
+  state: Uttar Pradesh
+  latitude: 28.75
+  longitude: 77.29
+  openaq_id: null
+  agency: UPPCB
+  zone: Ghaziabad
+  active: true
+- station_id: UP_GHAZIABAD_SANJAY_NAGAR
+  name: Sanjay Nagar
+  city: Ghaziabad
+  state: Uttar Pradesh
+  latitude: 28.69
+  longitude: 77.44
+  openaq_id: null
+  agency: UPPCB
+  zone: Ghaziabad
+  active: true
+- station_id: UP_GHAZIABAD_VASUNDHARA
+  name: Vasundhara
+  city: Ghaziabad
+  state: Uttar Pradesh
+  latitude: 28.658
+  longitude: 77.357
+  openaq_id: null
+  agency: UPPCB
+  zone: Ghaziabad
+  active: true
+- station_id: UP_GREATER_NOIDA_KP3
+  name: Knowledge Park III
+  city: Greater Noida
+  state: Uttar Pradesh
+  latitude: 28.474
+  longitude: 77.482
+  openaq_id: null
+  agency: UPPCB
+  zone: Greater Noida
+  active: true
+- station_id: UP_GREATER_NOIDA_KP5
+  name: Knowledge Park V
+  city: Greater Noida
+  state: Uttar Pradesh
+  latitude: 28.455
+  longitude: 77.505
+  openaq_id: null
+  agency: UPPCB
+  zone: Greater Noida
+  active: true
+- station_id: UP_HAPUR
+  name: Anand Vihar
+  city: Hapur
+  state: Uttar Pradesh
+  latitude: 28.73
+  longitude: 77.775
+  openaq_id: null
+  agency: UPPCB
+  zone: Hapur
+  active: true
+- station_id: UP_MEERUT_GANGA_NAGAR
+  name: Ganga Nagar
+  city: Meerut
+  state: Uttar Pradesh
+  latitude: 28.981
+  longitude: 77.719
+  openaq_id: null
+  agency: UPPCB
+  zone: Meerut
+  active: true
+- station_id: UP_MEERUT_JAI_BHIM
+  name: Jai Bhim Nagar
+  city: Meerut
+  state: Uttar Pradesh
+  latitude: 28.965
+  longitude: 77.7
+  openaq_id: null
+  agency: UPPCB
+  zone: Meerut
+  active: true
+- station_id: UP_MEERUT_PALLAVPURAM
+  name: Pallavpuram Phase 2
+  city: Meerut
+  state: Uttar Pradesh
+  latitude: 29.012
+  longitude: 77.678
+  openaq_id: null
+  agency: UPPCB
+  zone: Meerut
+  active: true
+- station_id: UP_MUZAFFARNAGAR
+  name: New Mandi
+  city: Muzaffarnagar
+  state: Uttar Pradesh
+  latitude: 29.4727
+  longitude: 77.7085
+  openaq_id: null
+  agency: UPPCB
+  zone: Muzaffarnagar
+  active: true
+- station_id: UP_NOIDA_SEC1
+  name: Noida Sector 1
+  city: Noida
+  state: Uttar Pradesh
+  latitude: 28.583
+  longitude: 77.31
+  openaq_id: null
+  agency: UPPCB
+  zone: Noida
+  active: true
+- station_id: UP_NOIDA_SEC116
+  name: Noida Sector 116
+  city: Noida
+  state: Uttar Pradesh
+  latitude: 28.574
+  longitude: 77.425
+  openaq_id: null
+  agency: UPPCB
+  zone: Noida
+  active: true
+- station_id: UP_NOIDA_SEC125
+  name: Noida Sector 125
+  city: Noida
+  state: Uttar Pradesh
+  latitude: 28.544
+  longitude: 77.334
+  openaq_id: null
+  agency: UPPCB
+  zone: Noida
+  active: true
+- station_id: UP_NOIDA_SEC62
+  name: Noida Sector 62
+  city: Noida
+  state: Uttar Pradesh
+  latitude: 28.6271
+  longitude: 77.3649
+  openaq_id: null
+  agency: IMD
+  zone: Noida
+  active: true
+ncr_bounds:
+  lat_min: 27.5
+  lat_max: 29.5
+  lon_min: 75.0
+  lon_max: 78.5
+fire_source_region:
+  lat_min: 27.5
+  lat_max: 33.0
+  lon_min: 73.0
+  lon_max: 80.0
+  radius_km:
+  - 300
+  - 500

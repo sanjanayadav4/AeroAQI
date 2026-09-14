@@ -99,6 +99,11 @@ class AQIObservation(_Base):
     aqi_computed: Optional[float] = Field(
         None, description="AQI computed from CPCB sub-index formula"
     )
+    aqi: Optional[float] = Field(None, description="AQI indicator for demo observations")
+    aqi_category: Optional[str] = Field(None, description="AQI category label")
+    temperature_c: Optional[float] = Field(None, description="Simulated temperature (°C)")
+    humidity: Optional[float] = Field(None, description="Simulated relative humidity (%)")
+    wind_speed_ms: Optional[float] = Field(None, description="Simulated wind speed (m/s)")
 
     @classmethod
     def from_db_row(cls, row: dict) -> "AQIObservation":

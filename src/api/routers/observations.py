@@ -17,12 +17,14 @@ GET /observations/{station_id}        — readings for one station
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import math
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import DbDep
 from src.api.schemas import AQIObservation, ObservationsResponse
+from src.demo.demo_stations import DEMO_STATIONS
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -108,27 +110,63 @@ def list_observations(
     ),
 )
 def latest_observations(db: DbDep) -> ObservationsResponse:
-    """Return the most recent observation row for every station."""
-    # Fetch last 48 h so we have data even if ingestion hasn't run recently
-    end_dt = datetime.now(timezone.utc)
-    start_dt = end_dt - timedelta(hours=48)
-
-    df = db.read_observations(start_time=start_dt, end_time=end_dt)
-
-    if df.empty:
-        return ObservationsResponse(count=0, observations=[])
-
-    # Keep only the latest row per station
-    import pandas as pd
-    df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True, errors="coerce")
-    df = df.dropna(subset=["timestamp_utc"])
-    latest = df.sort_values("timestamp_utc").groupby("station_id").tail(1)
-
-    records = [
-        AQIObservation.from_db_row(row)
-        for row in latest.to_dict(orient="records")
+    """Return one deterministic simulated latest observation for every demo station."""
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    observations = [
+        AQIObservation(**_demo_latest_observation(station, timestamp))
+        for station in DEMO_STATIONS
     ]
-    return ObservationsResponse(count=len(records), observations=records)
+    return ObservationsResponse(count=len(observations), observations=observations)
+
+
+def _demo_latest_observation(station: dict, timestamp: str) -> dict:
+    """Build realistic, repeatable prototype measurements from station metadata."""
+    station_id = station["station_id"]
+    seed = sum((index + 1) * ord(char) for index, char in enumerate(station_id))
+    latitude = float(station["latitude"])
+    longitude = float(station["longitude"])
+    phase = seed / 37.0 + latitude * 0.8 + longitude * 0.35
+
+    pm25 = 45.0 + (seed % 31) + 9.0 * math.sin(phase)
+    pm10 = pm25 * (1.45 + (seed % 9) / 100.0)
+    o3 = 28.0 + (seed % 23) + 7.0 * math.cos(phase / 2.0)
+    no2 = 18.0 + (seed % 19) + 5.0 * math.sin(phase / 1.7)
+    temperature = 22.0 + (seed % 90) / 10.0 + 1.5 * math.sin(phase)
+    humidity = 42.0 + (seed % 35) + 4.0 * math.cos(phase)
+    wind_speed = 1.2 + (seed % 28) / 10.0 + 0.4 * abs(math.sin(phase))
+    aqi = max(pm25 * 1.6, pm10 * 0.65, o3 * 0.9, no2 * 1.1)
+
+    if aqi <= 50:
+        category = "Good"
+    elif aqi <= 100:
+        category = "Satisfactory"
+    elif aqi <= 200:
+        category = "Moderate"
+    elif aqi <= 300:
+        category = "Poor"
+    elif aqi <= 400:
+        category = "Very Poor"
+    else:
+        category = "Severe"
+
+    return {
+        "timestamp_utc": timestamp,
+        "station_id": station_id,
+        "station_name": station.get("name"),
+        "latitude": latitude,
+        "longitude": longitude,
+        "data_source": "AeroAQI demo simulation",
+        "pm25": round(pm25, 2),
+        "pm10": round(pm10, 2),
+        "o3": round(o3, 2),
+        "no2": round(no2, 2),
+        "aqi": round(aqi, 2),
+        "aqi_computed": round(aqi, 2),
+        "aqi_category": category,
+        "temperature_c": round(temperature, 2),
+        "humidity": round(humidity, 2),
+        "wind_speed_ms": round(wind_speed, 2),
+    }
 
 
 @router.get(

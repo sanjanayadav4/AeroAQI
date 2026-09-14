@@ -21,34 +21,7 @@ import {
 // Dashboard hero: place the exact India Gate image at public/hero.png
 // Keep the filename exactly "hero.png" so the dashboard hero path remains stable.
 
-// ─── Forecast data ───────────────────────────────────────
-const forecastData = [
-  { t: "Now",  aqi: 182, pm25: 104 },
-  { t: "+6h",  aqi: 192, pm25: 112 },
-  { t: "+12h", aqi: 178, pm25: 98  },
-  { t: "+18h", aqi: 165, pm25: 90  },
-  { t: "+24h", aqi: 155, pm25: 85  },
-  { t: "+30h", aqi: 148, pm25: 80  },
-  { t: "+36h", aqi: 138, pm25: 74  },
-  { t: "+42h", aqi: 145, pm25: 78  },
-  { t: "+48h", aqi: 160, pm25: 88  },
-  { t: "+54h", aqi: 172, pm25: 95  },
-  { t: "+60h", aqi: 168, pm25: 92  },
-  { t: "+72h", aqi: 158, pm25: 87  },
-];
-
-const pblData = [
-  { t:"00",v:380},{t:"04",v:310},{t:"08",v:480},{t:"12",v:750},
-  {t:"16",v:820},{t:"20",v:560},{t:"24",v:410},
-];
-const mixData = [
-  {t:"00",v:45},{t:"04",v:38},{t:"08",v:62},{t:"12",v:88},
-  {t:"16",v:95},{t:"20",v:70},{t:"24",v:52},
-];
-const invData = [
-  {t:"00",v:3.2},{t:"04",v:4.1},{t:"08",v:2.8},{t:"12",v:1.2},
-  {t:"16",v:0.8},{t:"20",v:1.9},{t:"24",v:2.9},
-];
+// Atmospheric chart data is read from the AeroAQI backend at runtime.
 
 // ─── AQI helpers ─────────────────────────────────────────
 function aqiColor(v) {
@@ -134,11 +107,11 @@ const NAV = [
 ];
 
 const AQI_SCALE = [
-  { range:"0–50",   label:"Good",                    dot:"#22c55e" },
-  { range:"51–100", label:"Moderate",                dot:"#eab308" },
-  { range:"101–150",label:"Unhealthy for Sensitive", dot:"#f97316" },
-  { range:"151–200",label:"Unhealthy",               dot:"#ef4444" },
-  { range:"201–300",label:"Very Unhealthy",          dot:"#a855f7" },
+  { range:"0-50",   label:"Good",                    dot:"#22c55e" },
+  { range:"51-100", label:"Moderate",                dot:"#eab308" },
+  { range:"101-150",label:"Unhealthy for Sensitive", dot:"#f97316" },
+  { range:"151-200",label:"Unhealthy",               dot:"#ef4444" },
+  { range:"201-300",label:"Very Unhealthy",          dot:"#a855f7" },
   { range:"301+",   label:"Hazardous",               dot:"#b91c1c" },
 ];
 
@@ -216,6 +189,11 @@ function AmbientMelodyButton(){
 // ─── Header ───────────────────────────────────────────────
 function Header({ onMenu, onAlerts, onProfile, onLocation, user }) {
   const [time, setTime] = useState(new Date());
+  const { data: weather } = useLiveWeather();
+  const wc = weather?.data?.observations?.at(-1) || {};
+  const headerTemp = Number.isFinite(Number(wc.temperature)) ? Math.round(Number(wc.temperature)) : null;
+  const headerWind = Number.isFinite(Number(wc.wind_speed)) ? Number(wc.wind_speed).toFixed(1) : null;
+  const headerHumidity = Number.isFinite(Number(wc.relative_humidity)) ? Math.round(Number(wc.relative_humidity)) : null;
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(id);
@@ -260,16 +238,16 @@ function Header({ onMenu, onAlerts, onProfile, onLocation, user }) {
       <div className="hidden lg:flex items-center gap-4 text-sm text-[var(--text-secondary)]">
         <div className="flex items-center gap-1.5">
           <Thermometer size={14} className="text-orange-400"/>
-          <span className="font-semibold text-[var(--text-primary)]">31°C</span>
-          <span className="text-[var(--text-muted)] text-xs">Partly Cloudy</span>
+          <span className="font-semibold text-[var(--text-primary)]">{headerTemp == null ? "—" : `${headerTemp}°C`}</span>
+          <span className="text-[var(--text-muted)] text-xs">{headerTemp == null ? "Weather unavailable" : "Backend observation"}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Wind size={14} className="text-emerald-400"/>
-          <span>12 km/h <span className="text-[var(--text-muted)] text-xs">WNW</span></span>
+          <span>{headerWind == null ? "—" : `${headerWind} m/s`}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Droplets size={14} className="text-emerald-300"/>
-          <span>48%</span>
+          <span>{headerHumidity == null ? "—" : `${headerHumidity}%`}</span>
         </div>
       </div>
 
@@ -296,7 +274,32 @@ function Header({ onMenu, onAlerts, onProfile, onLocation, user }) {
 function Hero() {
   const [isHovered, setIsHovered] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+  const { stations } = useLiveStations();
+  const liveStation = stations.find(s => s.hasObs === true) || stations.find(s => s.aqi != null) || stations[0] || null;
+  const currentAqi = liveStation?.aqi;
+  const currentPm25 = liveStation?.pm25;
+  const [heroForecast, setHeroForecast] = useState([]);
   const heroRef = useRef(null);
+
+  useEffect(() => {
+    const stationId = stations.find(s => s.station_id)?.station_id;
+    if (!stationId) {
+      setHeroForecast([]);
+      return undefined;
+    }
+    let alive = true;
+    apiGet(`/forecast/${encodeURIComponent(stationId)}?hours=72`)
+      .then(data => {
+        if (!alive) return;
+        setHeroForecast((data?.hourly ?? []).map(h => ({
+          t: `+${h.forecast_hour}h`,
+          aqi: h.aqi_computed != null ? Math.round(h.aqi_computed) : null,
+          pm25: h.pm25 != null ? Math.round(h.pm25) : null,
+        })));
+      })
+      .catch(() => alive && setHeroForecast([]));
+    return () => { alive = false; };
+  }, [stations]);
 
   const handleMouseMove = (e) => {
     if (!heroRef.current) return;
@@ -319,30 +322,30 @@ function Hero() {
       {/* Background image with overlay */}
       <div className="absolute inset-0">
         <img src="/hero.png" alt="India Gate, Delhi"
-          className="w-full h-full object-cover object-center" />
+          className="w-full h-full object-cover object-center aero-hero-image" />
           
         {/* Dynamic Overlays: opacity reduces slightly on hover to reveal image */}
         <div className="absolute inset-0 transition-opacity duration-500 ease-out"
           style={{
-            background:"linear-gradient(90deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.4) 45%, transparent 75%)",
-            opacity: isHovered ? 0.75 : 1
+            background:"linear-gradient(90deg, rgba(2,8,23,.82) 0%, rgba(2,8,23,.58) 34%, rgba(2,8,23,.20) 62%, transparent 82%)",
+            opacity: isHovered ? 0.82 : 1
           }}/>
         <div className="absolute inset-0 transition-opacity duration-500 ease-out"
           style={{
-            background:"linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 40%, rgba(0,0,0,0.05) 100%)",
-            opacity: isHovered ? 0.4 : 1
+            background:"linear-gradient(180deg, rgba(2,8,23,.18) 0%, transparent 48%, rgba(2,8,23,.34) 100%)",
+            opacity: isHovered ? 0.55 : 1
           }}/>
           
         {/* Subtle Cursor Reveal */}
         <div className="absolute inset-0 pointer-events-none transition-opacity duration-300 hidden md:block"
              style={{
-               background: `radial-gradient(circle 400px at ${mousePos.x}% ${mousePos.y}%, transparent 0%, rgba(255,255,255,0.15) 100%)`,
+               background: `radial-gradient(circle 400px at ${mousePos.x}% ${mousePos.y}%, transparent 0%, rgba(2,8,23,0.16) 100%)`,
                opacity: isHovered ? 1 : 0
              }}
         />
       </div>
 
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6 p-7 lg:p-10" style={{minHeight:440}}>
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6 p-7 lg:p-10 aero-hero-copy" style={{minHeight:440}}>
 
         {/* LEFT */}
         <div className="flex flex-col justify-center">
@@ -371,15 +374,15 @@ function Hero() {
               Weather–Chemistry Coupled AQI Forecast
             </p>
             <p className="text-[var(--text-muted)] text-sm max-w-sm leading-relaxed mb-6">
-              72-Hour Prediction Horizon · CPCB · IMD · NASA FIRMS · ERA5
+              72-Hour Prediction Horizon · CPCB · IMD · Weather · Forecast models
             </p>
           </div>
 
           {/* Meta chips */}
           <div className="flex flex-wrap gap-2.5 mb-7">
             {[
-              { icon:<Clock size={11}/>, label:"Last Updated", val:"Sep 1, 2026 · 10:30 AM" },
-              { icon:<Layers size={11}/>, label:"Data Sources", val:"CPCB · IMD · NASA · ISRO" },
+              { icon:<Clock size={11}/>, label:"Last Updated", val:liveStation?.timestamp ? new Date(liveStation.timestamp).toLocaleString("en-IN", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : "Waiting for backend" },
+              { icon:<Layers size={11}/>, label:"Data Sources", val:"AeroAQI Backend" },
             ].map(m => (
               <div key={m.label} className="flex items-center gap-2 px-3 py-2 rounded-lg glass text-xs">
                 <span className="text-emerald-400">{m.icon}</span>
@@ -439,8 +442,8 @@ function Hero() {
               {/* Trend */}
               <div className="text-center p-3 rounded-xl" style={{background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.18)"}}>
                 <p className="text-[10px] text-[var(--text-muted)] mb-1">vs Yesterday</p>
-                <p className="text-xl font-black text-red-400 leading-none">↑ 12</p>
-                <p className="text-[10px] text-red-400 mt-1 font-medium">Worsening</p>
+                <p className="text-xl font-black text-slate-300 leading-none">—</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Backend trend unavailable</p>
               </div>
             </div>
           </div>
@@ -463,7 +466,7 @@ function Hero() {
             {/* Reference bands */}
             <div className="relative">
               <ResponsiveContainer width="100%" height={130}>
-                <AreaChart data={forecastData} margin={{top:5,right:5,left:-28,bottom:0}}>
+                <AreaChart data={heroForecast} margin={{top:5,right:5,left:-28,bottom:0}}>
                   <defs>
                     <linearGradient id="aqiGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
@@ -511,12 +514,18 @@ function Hero() {
 
 // ─── KPI Strip ────────────────────────────────────────────
 function KpiStrip() {
+  const { stations } = useLiveStations();
+  const { data: weather } = useLiveWeather();
+  const station = stations.find(s => s.hasObs === true) || stations.find(s => s.aqi != null) || stations[0] || null;
+  const current = weather?.data?.observations?.at(-1) || {};
+  const pbl = station?.pbl_height ?? null;
+
   const kpis = [
-    { icon:<Radio size={16}/>,       label:"Stations Online", val:"28", unit:"/ 38",    color:"text-green-400", glow:"rgba(34,197,94,.15)" },
-    { icon:<Thermometer size={16}/>, label:"Temperature",     val:"31", unit:"°C",      color:"text-red-400",glow:"rgba(249,115,22,.15)" },
-    { icon:<Wind size={16}/>,        label:"Wind Speed",      val:"12", unit:"km/h WNW",color:"text-cyan-400",  glow:"rgba(6,182,212,.15)"  },
-    { icon:<Droplets size={16}/>,    label:"Humidity",        val:"48", unit:"%",       color:"text-yellow-400",  glow:"rgba(59,130,246,.15)" },
-    { icon:<Gauge size={16}/>,       label:"PBL Height",      val:"750",unit:"m",       color:"text-purple-400",glow:"rgba(139,92,246,.15)" },
+    { icon:<Radio size={16}/>, label:"Stations Online", val:stations.length ? String(stations.length) : "—", unit:"backend", color:"text-green-400", glow:"rgba(34,197,94,.15)" },
+    { icon:<Thermometer size={16}/>, label:"Temperature", val:Number.isFinite(Number(current.temperature)) ? String(Math.round(current.temperature)) : "—", unit:"°C", color:"text-red-400", glow:"rgba(249,115,22,.15)" },
+    { icon:<Wind size={16}/>, label:"Wind Speed", val:Number.isFinite(Number(current.wind_speed)) ? Number(current.wind_speed).toFixed(1) : "—", unit:"m/s", color:"text-cyan-400", glow:"rgba(6,182,212,.15)" },
+    { icon:<Droplets size={16}/>, label:"Humidity", val:Number.isFinite(Number(current.relative_humidity)) ? String(Math.round(current.relative_humidity)) : "—", unit:"%", color:"text-yellow-400", glow:"rgba(59,130,246,.15)" },
+    { icon:<Gauge size={16}/>, label:"PBL Height", val:Number.isFinite(Number(pbl)) ? String(Math.round(pbl)) : "—", unit:"m", color:"text-purple-400", glow:"rgba(139,92,246,.15)" },
   ];
 
   return (
@@ -524,8 +533,7 @@ function KpiStrip() {
       {kpis.map(k => (
         <div key={k.label} className="card-hover flex items-center gap-3 px-4 py-3 rounded-xl"
           style={{background:`rgba(6,28,18,.86)`,border:"1px solid rgba(74,222,128,.1)",backdropFilter:"blur(12px)"}}>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{background:k.glow}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:k.glow}}>
             <span className={k.color}>{k.icon}</span>
           </div>
           <div className="min-w-0">
@@ -541,22 +549,62 @@ function KpiStrip() {
 }
 
 // ─── Weather & Atmosphere Panel ───────────────────────────
-// ─── Live Open-Meteo helpers ───────────────────────────────
-const DELHI_COORDS = { lat: 28.6139, lon: 77.2090 };
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-async function apiGet(path){ const r=await fetch(`${API_BASE}${path}`,{headers:{Accept:"application/json"}}); if(!r.ok) throw new Error(`API ${r.status}`); return r.json(); }
-async function apiPost(path,body){ const r=await fetch(`${API_BASE}${path}`,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body)}); if(!r.ok) throw new Error(`API ${r.status}`); return r.json(); }
-const WEATHER_URL = `https://api.open-meteo.com/v1/forecast?latitude=${DELHI_COORDS.lat}&longitude=${DELHI_COORDS.lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,weather_code&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,boundary_layer_height,temperature_1000hPa,temperature_925hPa,temperature_850hPa&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,wind_speed_10m_max,wind_direction_10m_dominant,pressure_msl_mean,precipitation_probability_max&timezone=Asia%2FKolkata&forecast_days=7&models=ecmwf_ifs`;
-const AQ_URL = (lat,lon) => `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,pm10,nitrogen_dioxide&timezone=Asia%2FKolkata`;
-function weatherCodeLabel(code){if(code===0)return "Clear sky";if([1,2,3].includes(code))return "Partly cloudy";if([45,48].includes(code))return "Foggy";if([51,53,55,56,57].includes(code))return "Drizzle";if([61,63,65,66,67].includes(code))return "Rain";if([80,81,82].includes(code))return "Rain showers";if([95,96,99].includes(code))return "Thunderstorm";return "Variable";}
-function weatherIcon(code){return [61,63,65,80,81,82,95,96,99].includes(code)?<CloudRain size={18}/>:<CloudSun size={18}/>;}
-function aqiStatus(v){if(v<=50)return "good";if(v<=100)return "moderate";if(v<=150)return "sensitive";if(v<=200)return "unhealthy";return "very";}
-function deriveAtmosphere(data){
-  const h=data?.hourly||{}; const n=h.time?.length||0;
-  const inversion=(i)=>{ const a=h.temperature_1000hPa?.[i], b=h.temperature_925hPa?.[i]; if(!Number.isFinite(a)||!Number.isFinite(b)) return null; const d=b-a; return {strength:+d.toFixed(1),status:d>1.0?"Active":d>0.2?"Weak":"None"}; };
-  return {inversion};
+// ─── Live backend helpers ──────────────────────────────────
+const API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
+
+async function apiGet(path) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const r = await fetch(`${API_BASE}${path}`, {
+      method: "GET",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`API ${r.status} ${r.statusText}`);
+    return await r.json();
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
-function useLiveWeather(){const [state,setState]=useState({loading:true,data:null,error:""});useEffect(()=>{let alive=true;const load=()=>fetch(WEATHER_URL).then(r=>{if(!r.ok)throw new Error("weather");return r.json()}).then(data=>alive&&setState({loading:false,data,error:""})).catch(()=>alive&&setState({loading:false,data:null,error:"Live weather unavailable"}));load();const id=setInterval(load,300000);return()=>{alive=false;clearInterval(id)}},[]);return state;}
+
+async function apiPost(path, body) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30000);
+  try {
+    const r = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`API ${r.status} ${r.statusText}`);
+    return await r.json();
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+function aqiStatus(v){if(v<=50)return "good";if(v<=100)return "moderate";if(v<=150)return "sensitive";if(v<=200)return "unhealthy";return "very";}
+function useLiveWeather(){
+  const [state,setState]=useState({loading:true,data:null,error:""});
+  useEffect(()=>{
+    let alive=true;
+    const load=()=>apiGet("/weather?hours=168")
+      .then(payload=>{
+        const observations=Array.isArray(payload)
+          ? payload
+          : (payload?.observations ?? payload?.data ?? []);
+        if (!alive) return;
+        setState({loading:false,data:{observations},error:""});
+      })
+      .catch(()=>alive&&setState({loading:false,data:null,error:"Backend weather unavailable"}));
+    load();
+    const id=setInterval(load,300000);
+    return()=>{alive=false;clearInterval(id)};
+  },[]);
+  return state;
+}
 function useLiveStations() {
   const [state, setState] = useState({ stations: [], live: false, loading: true, error: "" });
 
@@ -565,88 +613,103 @@ function useLiveStations() {
 
     const load = async () => {
       try {
-        // Step 1: fetch station metadata and latest observations in parallel
-        const [stationsRaw, obsRaw] = await Promise.all([
+        // The backend's latest-observation response is authoritative for the
+        // prototype: { count: 79, observations: [...] }.
+        const [stationsResult, obsResult] = await Promise.allSettled([
           apiGet("/stations"),
           apiGet("/observations/latest"),
         ]);
 
         if (!alive) return;
 
-        // Normalise /stations response  →  array of station metadata objects
+        const stationsRaw = stationsResult.status === "fulfilled" ? stationsResult.value : null;
+        const obsRaw = obsResult.status === "fulfilled" ? obsResult.value : null;
+
         const stationRows = Array.isArray(stationsRaw)
           ? stationsRaw
           : (stationsRaw?.stations ?? stationsRaw?.data ?? stationsRaw?.items ?? []);
+        const obsRows = Array.isArray(obsRaw)
+          ? obsRaw
+          : (obsRaw?.observations ?? obsRaw?.data ?? obsRaw?.items ?? []);
 
-        // Normalise /observations/latest response  →  keyed by station_id
-        const obsRows = obsRaw?.observations ?? (Array.isArray(obsRaw) ? obsRaw : []);
+        // Index latest observations by station_id.
         const obsMap = {};
         for (const o of obsRows) {
-          if (o.station_id) obsMap[o.station_id] = o;
+          if (o?.station_id) obsMap[o.station_id] = o;
         }
 
-        if (!stationRows.length) {
-          // /stations returned nothing — fall through to fallback
-          throw new Error("empty_stations");
+        // IMPORTANT: if /stations is incomplete/empty, build the station list
+        // directly from /observations/latest. This guarantees that the 79
+        // backend observation rows are not discarded by a metadata mismatch.
+        const mergedRows = [...stationRows];
+        const knownIds = new Set(mergedRows.map(s => s?.station_id).filter(Boolean));
+        for (const o of obsRows) {
+          if (o?.station_id && !knownIds.has(o.station_id)) {
+            mergedRows.push(o);
+            knownIds.add(o.station_id);
+          }
         }
 
-        const stations = stationRows
+        if (!mergedRows.length) throw new Error("empty_stations");
+
+        const stations = mergedRows
           .map((s, i) => {
-            const obs = obsMap[s.station_id] ?? null;
-
-            // AQI: prefer aqi_computed, then aqi_raw
-            const aqiRaw = obs ? (obs.aqi_computed ?? obs.aqi_raw ?? null) : null;
-            const aqi = aqiRaw !== null ? Number(aqiRaw) : null;
+            const obs = obsMap[s?.station_id] ?? (s?.pm25 != null || s?.aqi != null ? s : null);
+            const aqiRaw = obs?.aqi_computed ?? obs?.aqi_raw ?? obs?.aqi ?? null;
+            const aqi = aqiRaw != null ? Number(aqiRaw) : null;
+            const lat = Number(s?.latitude ?? s?.lat);
+            const lon = Number(s?.longitude ?? s?.lon);
 
             return {
-              name:      s.name      ?? s.station_name ?? s.station_id ?? `Station ${i + 1}`,
-              station_id: s.station_id,
-              lat:       Number(s.latitude  ?? s.lat),
-              lon:       Number(s.longitude ?? s.lon),
-              city:      s.city  ?? null,
-              state:     s.state ?? null,
-              agency:    s.agency ?? null,
-              zone:      s.zone  ?? null,
-              // Pollutant values from observations (null when unavailable)
-              aqi:       Number.isFinite(aqi) ? aqi : null,
-              pm25:      obs?.pm25  != null ? Number(obs.pm25)  : null,
-              pm10:      obs?.pm10  != null ? Number(obs.pm10)  : null,
-              no2:       obs?.no2   != null ? Number(obs.no2)   : null,
-              o3:        obs?.o3    != null ? Number(obs.o3)    : null,
-              so2:       obs?.so2   != null ? Number(obs.so2)   : null,
-              co:        obs?.co    != null ? Number(obs.co)    : null,
-              timestamp: obs?.timestamp_utc ?? null,
+              name: s?.name ?? s?.station_name ?? obs?.station_name ?? s?.station_id ?? `Station ${i + 1}`,
+              station_id: s?.station_id ?? obs?.station_id,
+              lat,
+              lon,
+              city: s?.city ?? obs?.city ?? null,
+              state: s?.state ?? obs?.state ?? null,
+              agency: s?.agency ?? obs?.agency ?? null,
+              zone: s?.zone ?? obs?.zone ?? null,
+              aqi: Number.isFinite(aqi) ? aqi : null,
+              pm25: obs?.pm25 != null ? Number(obs.pm25) : null,
+              pm10: obs?.pm10 != null ? Number(obs.pm10) : null,
+              no2: obs?.no2 != null ? Number(obs.no2) : null,
+              o3: obs?.o3 != null ? Number(obs.o3) : null,
+              so2: obs?.so2 != null ? Number(obs.so2) : null,
+              co: obs?.co != null ? Number(obs.co) : null,
+              temperature_c: obs?.temperature_c != null ? Number(obs.temperature_c) : null,
+              humidity: obs?.humidity != null ? Number(obs.humidity) : null,
+              wind_speed_ms: obs?.wind_speed_ms != null ? Number(obs.wind_speed_ms) : null,
+              pbl_height: obs?.pbl_height ?? obs?.boundary_layer_height_m ?? null,
+              timestamp: obs?.timestamp_utc ?? obs?.timestamp ?? null,
               data_source: obs?.data_source ?? null,
-              // Derived: AQI status (null when AQI is unavailable)
-              status:    Number.isFinite(aqi) ? aqiStatus(aqi) : "unknown",
-              source:    obs ? "AeroAQI Backend" : "metadata-only",
-              hasObs:    obs !== null,
+              status: Number.isFinite(aqi) ? aqiStatus(aqi) : "unknown",
+              source: obs ? "AeroAQI Backend" : "metadata-only",
+              hasObs: obs !== null,
             };
           })
-          // Drop rows where coordinates are not valid numbers
-          .filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+          .filter(x => x.station_id && Number.isFinite(x.lat) && Number.isFinite(x.lon));
 
         if (alive) {
-          setState({ stations, live: true, loading: false, error: "" });
+          setState({
+            stations,
+            live: stations.length > 0,
+            loading: false,
+            error: stations.length ? "" : "No valid station rows returned by backend.",
+          });
         }
-        return; // success — do not fall through to the fallback
       } catch (err) {
         if (!alive) return;
-        // Both API calls failed or stations was empty — show nothing rather
-        // than silently mixing real and fake data.
-        setState(prev => ({
-  stations: prev.stations,
-  live: prev.stations.length > 0,
-  loading: false,
-  error: prev.stations.length > 0
-    ? "Live refresh unavailable — showing last synced data."
-    : "Station data unavailable. Ensure the AeroAQI backend is running."
-}));
+        setState({
+          stations: [],
+          live: false,
+          loading: false,
+          error: "Station data unavailable. Ensure the AeroAQI backend is running on port 8000.",
+        });
       }
     };
 
     load();
-    const id = setInterval(load, 300_000); // refresh every 5 min
+    const id = setInterval(load, 300_000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
@@ -655,29 +718,29 @@ function useLiveStations() {
 
 function WeatherPanel() {
   const {loading,data,error}=useLiveWeather(); const [day,setDay]=useState(0);
-  const daily=data?.daily, current=data?.current, hourly=data?.hourly;
-  const atmosphere=deriveAtmosphere(data);
-  const days=(daily?.time||[]).map((date,i)=>({date,max:daily.temperature_2m_max?.[i],min:daily.temperature_2m_min?.[i],humidity:daily.relative_humidity_2m_mean?.[i],rain:daily.precipitation_probability_max?.[i],wind:daily.wind_speed_10m_max?.[i],windDir:daily.wind_direction_10m_dominant?.[i],pressure:daily.pressure_msl_mean?.[i]}));
-  const selected=days[day]||{};
-  const nowIdx=Math.max(0,(hourly?.time||[]).findIndex(t=>t>=current?.time));
-  const pbl=hourly?.boundary_layer_height?.[nowIdx];
-  const inv=atmosphere.inversion(nowIdx);
+  const observations=(data?.observations||[]).filter(row=>row && row.timestamp_utc).sort((a,b)=>new Date(a.timestamp_utc)-new Date(b.timestamp_utc));
+  const current=observations[observations.length-1]||{};
+  const recent=observations.slice(-7).reverse();
+  const selected=recent[day]||current;
+  const pbl=Number(current.pbl_height);
+  const inversionStrength=Number(current.inversion_strength);
+  const inv=Number.isFinite(inversionStrength)?{strength:inversionStrength,status:current.inversion_flag?"Active":"None"}:null;
   const metrics=[
-    ["Temperature",current?.temperature_2m, v=>`${Math.round(v)}°C`,<Thermometer size={15}/>,"#86efac"],
-    ["Humidity",current?.relative_humidity_2m,v=>`${Math.round(v)}%`,<Droplets size={15}/>,"#6ee7b7"],
-    ["Wind",current?.wind_speed_10m,v=>`${Math.round(v)} km/h`,<Wind size={15}/>,"#34d399"],
-    ["Pressure",current?.pressure_msl,v=>`${Math.round(v)} hPa`,<Gauge size={15}/>,"#a7f3d0"],
+    ["Temperature",Number(current.temperature), v=>`${Math.round(v)}°C`,<Thermometer size={15}/>,"#86efac"],
+    ["Humidity",Number(current.relative_humidity),v=>`${Math.round(v)}%`,<Droplets size={15}/>,"#6ee7b7"],
+    ["Wind",Number(current.wind_speed),v=>`${Math.round(v)} m/s`,<Wind size={15}/>,"#34d399"],
+    ["Pressure",Number(current.surface_pressure),v=>`${Math.round(v)} hPa`,<Gauge size={15}/>,"#a7f3d0"],
     ["PBL / Mixing",pbl,v=>Number.isFinite(v)?`${Math.round(v)} m`:"Unavailable",<Layers3 size={15}/>,"#4ade80"],
     ["Inversion",inv?.strength,v=>inv?`${inv.status} · ${v>0?"+":""}${v}°C`:"Unavailable",<Activity size={15}/>,"#fbbf24"]
   ];
-  return <div id="weather-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"linear-gradient(145deg,rgba(7,35,24,.86),rgba(5,22,18,.78))",border:"1px solid rgba(74,222,128,.13)",backdropFilter:"blur(18px)"}}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2"><CloudSun size={18} className="text-emerald-300"/>Weather & Atmosphere</p><p className="text-[10px] text-[var(--text-muted)] mt-1">Delhi-NCR live conditions + 7-day atmospheric outlook</p></div><span className="source-pill">{loading?"Updating…":error?"Unavailable":"LIVE · Open-Meteo ECMWF"}</span></div>
+  return <div id="weather-section" className="aero-readable card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"linear-gradient(145deg,rgba(7,35,24,.86),rgba(5,22,18,.78))",border:"1px solid rgba(74,222,128,.13)",backdropFilter:"blur(18px)"}}>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-100 flex items-center gap-2"><CloudSun size={18} className="text-emerald-300"/>Weather & Atmosphere</p><p className="text-[10px] text-slate-400 mt-1">Backend weather observations and atmospheric conditions</p></div><span className="source-pill">{loading?"Updating…":error?"Unavailable":"LIVE · AeroAQI Backend"}</span></div>
     {error&&<div className="rounded-xl p-3 text-[10px] text-amber-200" style={{background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.15)"}}>Live weather unavailable right now. No fake weather values are shown.</div>}
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">{metrics.map(([label,val,fmt,icon,color])=><div key={label} className="science-card p-3 rounded-xl"><span style={{color}}>{icon}</span><p className="text-[9px] text-[var(--text-muted)] mt-2">{label}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{Number.isFinite(val)?fmt(val):"Unavailable"}</p></div>)}</div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">{metrics.map(([label,val,fmt,icon,color])=><div key={label} className="science-card p-3 rounded-xl"><span style={{color}}>{icon}</span><p className="text-[9px] text-slate-400 mt-2">{label}</p><p className="text-sm font-extrabold text-slate-100 mt-1">{Number.isFinite(val)?fmt(val):"Unavailable"}</p></div>)}</div>
     <div className="rounded-2xl p-4" style={{background:"linear-gradient(135deg,rgba(34,197,94,.09),rgba(16,185,129,.035),rgba(255,255,255,.015))",border:"1px solid rgba(74,222,128,.1)"}}>
       <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold text-[var(--text-primary)]">7-day weather & atmosphere outlook</p><p className="text-[9px] text-[var(--text-muted)]">Temperature · humidity · wind · pressure · mixing</p></div><span className="text-[9px] text-emerald-300">Delhi-NCR</span></div>
-      <div className="flex gap-2 overflow-x-auto pb-1">{days.map((d,i)=><button key={d.date} onClick={()=>setDay(i)} className="min-w-[122px] p-3 rounded-xl text-left" style={{background:i===day?"rgba(34,197,94,.12)":"var(--surface-secondary)",border:`1px solid ${i===day?"rgba(74,222,128,.25)":"var(--surface-hover)"}`}}><p className="text-[9px] text-[var(--text-muted)]">{i===0?"Today":new Date(`${d.date}T12:00:00`).toLocaleDateString("en-IN",{weekday:"short"})}</p><p className="text-sm font-black text-[var(--text-primary)] mt-2">{Number.isFinite(d.max)?Math.round(d.max):"—"}° <span className="text-[var(--text-muted)] font-medium">/ {Number.isFinite(d.min)?Math.round(d.min):"—"}°</span></p><p className="text-[9px] text-emerald-300 mt-1">RH {Number.isFinite(d.humidity)?Math.round(d.humidity):"—"}%</p><p className="text-[9px] text-[var(--text-muted)] mt-1">Wind {Number.isFinite(d.wind)?Math.round(d.wind):"—"} km/h</p></button>)}</div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">{[["Humidity",Number.isFinite(selected.humidity)?`${Math.round(selected.humidity)}%`:"Unavailable"],["Wind",Number.isFinite(selected.wind)?`${Math.round(selected.wind)} km/h`:"Unavailable"],["Pressure",Number.isFinite(selected.pressure)?`${Math.round(selected.pressure)} hPa`:"Unavailable"],["Rain",Number.isFinite(selected.rain)?`${Math.round(selected.rain)}%`:"Unavailable"],["PBL now",Number.isFinite(pbl)?`${Math.round(pbl)} m`:"Unavailable"]].map(([a,b])=><div key={a} className="p-3 rounded-xl bg-white/[.025]"><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{b}</p></div>)}</div>
+      <div className="flex gap-2 overflow-x-auto pb-1">{recent.map((row,i)=><button key={`${row.station_id}-${row.timestamp_utc}`} onClick={()=>setDay(i)} className="min-w-[150px] p-3 rounded-xl text-left" style={{background:i===day?"rgba(34,197,94,.12)":"var(--surface-secondary)",border:`1px solid ${i===day?"rgba(74,222,128,.25)":"var(--surface-hover)"}`}}><p className="text-[9px] text-[var(--text-muted)]">{new Date(row.timestamp_utc).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</p><p className="text-sm font-black text-[var(--text-primary)] mt-2">{Number.isFinite(Number(row.temperature))?`${Math.round(row.temperature)}°C`:"Unavailable"}</p><p className="text-[9px] text-emerald-300 mt-1">RH {Number.isFinite(Number(row.relative_humidity))?`${Math.round(row.relative_humidity)}%`:"Unavailable"}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">Wind {Number.isFinite(Number(row.wind_speed))?`${Math.round(row.wind_speed)} m/s`:"Unavailable"}</p></button>)}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">{[["Humidity",Number.isFinite(Number(selected.relative_humidity))?`${Math.round(selected.relative_humidity)}%`:"Unavailable"],["Wind",Number.isFinite(Number(selected.wind_speed))?`${Math.round(selected.wind_speed)} m/s`:"Unavailable"],["Pressure",Number.isFinite(Number(selected.surface_pressure))?`${Math.round(selected.surface_pressure)} hPa`:"Unavailable"],["PBL",Number.isFinite(Number(selected.pbl_height))?`${Math.round(selected.pbl_height)} m`:"Unavailable"]].map(([a,b])=><div key={a} className="p-3 rounded-xl bg-white/[.025]"><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{b}</p></div>)}</div>
     </div>
     <p className="text-[9px] text-[var(--text-muted)]">PBL is a direct atmospheric model variable. Inversion is a derived indicator from real pressure-level temperatures (1000 hPa vs 925 hPa); it is not presented as a direct observation.</p>
   </div>;
@@ -685,90 +748,26 @@ function WeatherPanel() {
 
 // ─── Plume Tracker Panel ──────────────────────────────────
 function PlumePanel() {
-  const [tab, setTab] = useState(0);
-  const [timeIdx, setTimeIdx] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [showFires, setShowFires] = useState(true);
-  const [showWind, setShowWind] = useState(true);
-  const [selectedRegion, setSelectedRegion] = useState("Punjab");
-  const tabs = ["Plume Map", "Source Regions", "Transport Animation"];
-  const times = ["Now", "+12h", "+24h", "+48h", "+72h"];
-  const regionData = [
-    {name:"Punjab", fires:42, risk:"High", color:"#ef4444", desc:"Highest modeled source-region influence on Delhi under current transport."},
-    {name:"Haryana", fires:28, risk:"High", color:"#f97316", desc:"Upwind burning activity with direct transport potential toward Delhi."},
-    {name:"Rajasthan", fires:8, risk:"Low", color:"#eab308", desc:"Lower fire activity with weaker modeled transport contribution."},
-    {name:"Uttar Pradesh", fires:19, risk:"Moderate", color:"#a855f7", desc:"Regional sources may influence eastern NCR under favorable winds."},
-  ];
-  const selected = regionData.find(r=>r.name===selectedRegion) || regionData[0];
-  const hotspots = [
-    [108,62,8],[140,76,6],[168,91,10],[132,124,5],[194,150,4],[268,168,6],[296,186,5],[322,204,4]
-  ];
-
-  useEffect(()=>{
-    if (!playing) return;
-    const id = window.setInterval(()=>setTimeIdx(v=>{
-      if (v >= times.length-1) { setPlaying(false); return 0; }
-      return v+1;
-    }), 900);
-    return ()=>window.clearInterval(id);
-  },[playing]);
-
-  return (
-    <div id="plume-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4"
-      style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(16px)"}}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">Stubble burning · source attribution · transport toward NCR</p></div>
-        <div className="flex items-center gap-2"><span className="flex items-center gap-1 text-[10px] text-orange-300 px-2 py-1 rounded-full" style={{background:"rgba(249,115,22,.09)",border:"1px solid rgba(249,115,22,.18)"}}><Flame size={11}/> Fire transport</span></div>
+  const [tab,setTab]=useState(0);
+  const [timeIdx,setTimeIdx]=useState(0);
+  const [playing,setPlaying]=useState(false);
+  const tabs=["Plume Map","Source Regions","Transport Animation"];
+  const times=["Now","+12h","+24h","+48h","+72h"];
+  useEffect(()=>{if(!playing)return;const id=setInterval(()=>setTimeIdx(v=>{if(v>=times.length-1){setPlaying(false);return 0}return v+1}),900);return()=>clearInterval(id)},[playing]);
+  return <div id="plume-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(16px)"}}>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">Stubble burning · source attribution · transport toward NCR</p></div><span className="flex items-center gap-1 text-[10px] text-amber-300 px-2 py-1 rounded-full" style={{background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.18)"}}><Info size={11}/> Fire-source backend not exposed</span></div>
+    <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-hover)"}}>{tabs.map((t,i)=><button key={t} onClick={()=>setTab(i)} className={`flex-1 text-[10px] py-2 rounded-md font-semibold transition-all ${tab===i?"text-[var(--text-primary)]":"text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`} style={tab===i?{background:"linear-gradient(135deg,rgba(6,182,212,.25),rgba(59,130,246,.2))",border:"1px solid rgba(6,182,212,.2)"}:{}}>{t}</button>)}</div>
+    {tab===0&&<div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+      <div className="relative rounded-xl overflow-hidden min-h-[360px]" style={{background:"#051a0e",border:"1px solid var(--surface-hover)"}}>
+        <div className="absolute inset-0 map-grid opacity-30"/>
+        <div className="absolute inset-0 flex items-center justify-center"><div className="text-center max-w-sm px-5"><div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center" style={{background:"rgba(34,211,238,.08)",border:"1px solid rgba(34,211,238,.18)"}}><Flame size={22} className="text-cyan-300"/></div><p className="text-sm font-bold text-[var(--text-primary)] mt-4">Awaiting fire detections</p><p className="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed">No fire/FRP endpoint is exposed by the current backend, so no fire counts, hotspots or plume values are invented in the frontend.</p></div></div>
+        <div className="absolute bottom-3 left-3 right-3 flex items-center gap-3 text-[9px] text-[var(--text-muted)]"><span><i className="inline-block w-2 h-2 rounded-full bg-slate-500 mr-1"/>Backend fire data unavailable</span></div>
       </div>
-
-      <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-hover)"}}>
-        {tabs.map((t,i)=><button key={t} onClick={()=>setTab(i)} className={`flex-1 text-[10px] py-2 rounded-md font-semibold transition-all ${tab===i?"text-[var(--text-primary)]":"text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`} style={tab===i?{background:"linear-gradient(135deg,rgba(6,182,212,.25),rgba(59,130,246,.2))",border:"1px solid rgba(6,182,212,.2)"}:{}}>{t}</button>)}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
-        <div className="relative rounded-xl overflow-hidden min-h-[360px]" style={{background:"#051a0e",border:"1px solid var(--surface-hover)"}}>
-          <div className="absolute inset-0 map-grid opacity-30"/>
-          <svg viewBox="0 0 420 320" className="absolute inset-0 w-full h-full">
-            <defs>
-              <linearGradient id="plumePath" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity=".05"/><stop offset="45%" stopColor="#f97316" stopOpacity=".38"/><stop offset="100%" stopColor="#eab308" stopOpacity=".03"/></linearGradient>
-              <filter id="softGlow"><feGaussianBlur stdDeviation="7"/></filter>
-              <marker id="windArrowAero" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#38bdf8"/></marker>
-            </defs>
-            <path d="M55 42 C125 42 185 82 205 128 C226 175 242 218 332 270" fill="none" stroke="url(#plumePath)" strokeWidth={65} opacity={.45+timeIdx*.07} filter="url(#softGlow)"/>
-            <path d="M55 42 C125 42 185 82 205 128 C226 175 242 218 332 270" fill="none" stroke="#f97316" strokeWidth={25} opacity={.12+timeIdx*.025}/>
-            <path d="M65 52 C120 57 170 92 199 140 C225 182 253 228 325 264" fill="none" stroke="#fb923c" strokeWidth={2} strokeDasharray="7 6" opacity={.65}/>
-            {showWind && [[85,70,125,105],[135,93,173,130],[185,126,221,166],[236,166,273,208]].map((a,i)=><line key={i} x1={a[0]} y1={a[1]} x2={a[2]} y2={a[3]} stroke="#38bdf8" strokeWidth={1.5} strokeDasharray="5 4" markerEnd="url(#windArrowAero)" opacity={.75}/>) }
-            {showFires && hotspots.map((h,i)=><g key={i} className="cursor-pointer"><circle cx={h[0]} cy={h[1]} r={h[2]*2.1} fill="#ef4444" opacity={.12}/><circle cx={h[0]} cy={h[1]} r={h[2]} fill={i%3===0?"#ef4444":i%3===1?"#f97316":"#eab308"} opacity={.9}/><circle cx={h[0]} cy={h[1]} r="2" fill="white"/></g>)}
-            <circle cx="230" cy="210" r="10" fill="rgba(6,182,212,.16)" stroke="#22d3ee" strokeWidth="1.5"/><circle cx="230" cy="210" r="4" fill="#22d3ee"/><text x="242" y="214" fill="white" fontSize="10" fontWeight="800">Delhi</text>
-            <text x="60" y="28" fill="#cbd5e1" fontSize="10" fontWeight="700">Punjab</text><text x="160" y="105" fill="#cbd5e1" fontSize="10" fontWeight="700">Haryana</text><text x="300" y="245" fill="#cbd5e1" fontSize="10" fontWeight="700">Uttar Pradesh</text>
-          </svg>
-          <div className="absolute left-3 top-3 rounded-xl px-3 py-2" style={{background:"rgba(3,12,31,.88)",border:"1px solid var(--surface-hover)"}}><p className="text-[9px] text-[var(--text-muted)]">Modeled transport horizon</p><p className="text-sm font-black text-[var(--text-primary)]">{times[timeIdx]}</p><p className="text-[9px] text-emerald-300">Wind: WNW → Delhi</p></div>
-          <div className="absolute right-3 top-3 flex flex-col gap-1">
-            <button onClick={()=>setShowFires(v=>!v)} className={`px-2 py-1 rounded-lg text-[9px] font-semibold ${showFires?"text-orange-300":"text-[var(--text-muted)]"}`} style={{background:"rgba(3,12,31,.88)",border:"1px solid var(--surface-hover)"}}><Flame size={10} className="inline mr-1"/>Fires</button>
-            <button onClick={()=>setShowWind(v=>!v)} className={`px-2 py-1 rounded-lg text-[9px] font-semibold ${showWind?"text-emerald-300":"text-[var(--text-muted)]"}`} style={{background:"rgba(3,12,31,.88)",border:"1px solid var(--surface-hover)"}}><Wind size={10} className="inline mr-1"/>Wind</button>
-          </div>
-          <div className="absolute bottom-3 left-3 right-3 flex items-center gap-3 text-[9px] text-[var(--text-muted)]"><span><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"/>Fire hotspot</span><span><i className="inline-block w-5 border-t border-dashed border-cyan-400 mr-1"/>Wind direction</span><span><i className="inline-block w-4 h-2 rounded bg-orange-500/50 mr-1"/>Plume intensity</span></div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
-            <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Source region</p>
-            <select value={selectedRegion} onChange={e=>setSelectedRegion(e.target.value)} className="mt-2 w-full rounded-lg px-2.5 py-2 text-xs text-[var(--text-primary)] outline-none" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}>{regionData.map(r=><option key={r.name}>{r.name}</option>)}</select>
-            <div className="grid grid-cols-2 gap-2 mt-2"><div><p className="text-[9px] text-[var(--text-muted)]">Fire detections</p><p className="text-lg font-black text-[var(--text-primary)]">{selected.fires}</p></div><div><p className="text-[9px] text-[var(--text-muted)]">Transport risk</p><p className="text-sm font-bold" style={{color:selected.color}}>{selected.risk}</p></div></div>
-            <p className="text-[10px] leading-relaxed text-[var(--text-muted)] mt-2">{selected.desc}</p>
-          </div>
-          <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
-            <div className="flex items-center justify-between"><p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Timeline</p><button onClick={()=>setPlaying(v=>!v)} className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-300" style={{background:"rgba(6,182,212,.1)",border:"1px solid rgba(6,182,212,.2)"}}>{playing?"Ⅱ":"▶"}</button></div>
-            <input type="range" min="0" max={times.length-1} value={timeIdx} onChange={e=>{setPlaying(false);setTimeIdx(Number(e.target.value))}} className="w-full mt-3 accent-cyan-400"/>
-            <div className="flex justify-between mt-1 text-[9px] text-[var(--text-muted)]">{times.map(t=><span key={t}>{t}</span>)}</div>
-          </div>
-        </div>
-      </div>
-
-      {tab===1 && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">{regionData.map(r=><button key={r.name} onClick={()=>setSelectedRegion(r.name)} className="text-left rounded-xl p-3 hover:bg-white/[.04] transition" style={{background:"var(--surface-secondary)",border:`1px solid ${selectedRegion===r.name?r.color+"66":"var(--surface-hover)"}`}}><p className="text-xs font-bold text-[var(--text-primary)]">{r.name}</p><p className="text-[10px] text-[var(--text-muted)] mt-1">{r.fires} active detections</p><p className="text-[10px] font-semibold mt-2" style={{color:r.color}}>{r.risk} transport risk</p></button>)}</div>}
-      {tab===2 && <div className="rounded-xl p-4" style={{background:"rgba(6,182,212,.04)",border:"1px solid rgba(6,182,212,.12)"}}><div className="flex items-center gap-2"><Radio size={14} className="text-cyan-400"/><p className="text-xs font-bold text-[var(--text-primary)]">Transport animation</p></div><p className="text-[11px] text-[var(--text-muted)] mt-2">Press play to step through the 72-hour transport horizon. The visualization shows the modeled source-to-Delhi direction; live values will come from the fire and weather APIs after backend wiring.</p></div>}
-    </div>
-  );
+      <div className="space-y-3"><div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Source region</p><div className="mt-3 rounded-lg p-3" style={{background:"rgba(245,158,11,.05)",border:"1px solid rgba(245,158,11,.12)"}}><p className="text-xs font-semibold text-amber-200">No backend fire-region data</p><p className="text-[10px] text-[var(--text-muted)] mt-1">Connect FIRMS/fire API to populate this panel.</p></div></div><div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Timeline</p><div className="flex items-center gap-2 mt-2"><button onClick={()=>setPlaying(v=>!v)} className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-300" style={{background:"rgba(6,182,212,.1)",border:"1px solid rgba(6,182,212,.2)"}}>{playing?<Pause size={12}/>:<Play size={12}/>}</button><span className="text-[10px] text-[var(--text-muted)]">{times[timeIdx]} · visualization only until fire backend is wired</span></div></div></div>
+    </div>}
+    {tab===1&&<div className="rounded-xl p-6 text-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-sm font-bold text-[var(--text-primary)]">Source-region data unavailable</p><p className="text-[10px] text-[var(--text-muted)] mt-2">This frontend intentionally does not fabricate Punjab/Haryana/Rajasthan/UP fire counts.</p></div>}
+    {tab===2&&<div className="rounded-xl p-6 text-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-sm font-bold text-[var(--text-primary)]">Transport animation ready for backend data</p><p className="text-[10px] text-[var(--text-muted)] mt-2">The timeline control works, but plume intensity and fire transport values will appear only when the backend exposes them.</p></div>}
+  </div>;
 }
 
 // ─── Alerts Panel ─────────────────────────────────────────
@@ -793,12 +792,9 @@ function AlertsPanel(){
 }
 
 // ─── NCR Map Panel ────────────────────────────────────────
-const NCR_STATIONS = [
-  {name:"Delhi",lat:28.6139,lon:77.2090,aqi:182,status:"unhealthy"},{name:"Gurugram",lat:28.4595,lon:77.0266,aqi:205,status:"very"},{name:"Noida",lat:28.5355,lon:77.3910,aqi:143,status:"sensitive"},{name:"Ghaziabad",lat:28.6692,lon:77.4538,aqi:173,status:"unhealthy"},{name:"Faridabad",lat:28.4089,lon:77.3178,aqi:187,status:"unhealthy"},{name:"Sonipat",lat:28.9931,lon:77.0151,aqi:158,status:"unhealthy"},{name:"Bahadurgarh",lat:28.6924,lon:76.8513,aqi:151,status:"unhealthy"},{name:"Panipat",lat:29.3909,lon:76.9635,aqi:149,status:"sensitive"},{name:"Palwal",lat:28.1487,lon:77.3320,aqi:82,status:"moderate"},
-];
 function NcrMapPanel() {
   const {stations:liveStations,live,loading}=useLiveStations();
-  const [zoom,setZoom]=useState(10); const [layer,setLayer]=useState("dark"); const [selected,setSelected]=useState(null); const [showStations,setShowStations]=useState(true);
+  const [zoom,setZoom]=useState(10); const [layer,setLayer]=useState("dark"); const [selected,setSelected]=useState(null); const [showStations,setShowStations]=useState(true); const [pollutant,setPollutant]=useState("AQI"); const [showWind,setShowWind]=useState(true); const [showFires,setShowFires]=useState(true); const [showBoundary,setShowBoundary]=useState(true);
   const center={lat:28.62,lon:77.16};
   const tileSize=256;
   const worldPx=tileSize*Math.pow(2,zoom);
@@ -808,7 +804,7 @@ function NcrMapPanel() {
   const tiles=[]; const tileX=Math.floor(cx/tileSize),tileY=Math.floor(cy/tileSize); for(let dx=-2;dx<=2;dx++) for(let dy=-1;dy<=1;dy++){let x=tileX+dx,y=tileY+dy,n=Math.pow(2,zoom);if(x<0||x>=n||y<0||y>=n)continue;tiles.push({x,y,key:`${x}-${y}`,left:x*tileSize-cx+420,top:y*tileSize-cy+210});}
   const markerPos=s=>({left:420+(lonToX(s.lon)-cx),top:210+(latToY(s.lat)-cy)});
 
-  // Derive marker colour directly from the numeric AQI value so all 15 stations
+  // Derive marker colour directly from the numeric AQI value so every backend station
   // render with a visible marker even when some have no observation data.
   // Stations without AQI data fall back to a neutral slate colour.
   const aqiColour = aqi => {
@@ -819,17 +815,23 @@ function NcrMapPanel() {
     if (aqi <= 300) return "#ef4444"; // red
     return "#a855f7";                 // purple
   };
+  const pollutantKey = {AQI:"aqi", "PM2.5":"pm25", PM10:"pm10", O3:"o3", NO2:"no2"}[pollutant];
+  const pollutantValue = station => station[pollutantKey];
+  const pollutantColour = station => pollutant === "AQI" ? aqiColour(station.aqi) : aqiColour((pollutantValue(station) ?? 0) * (pollutant === "PM2.5" ? 1.8 : pollutant === "PM10" ? 0.8 : 1.5));
 
   return <div id="map-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(16px)"}}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">Delhi-NCR Air Quality Map</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">Live-style spatial view · Delhi + surrounding NCR districts</p></div><div className="flex gap-2"><span className="flex items-center gap-1 text-[10px] text-green-400 px-2 py-1 rounded-full" style={{background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)"}}><span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400"/>{loading?"Updating…":live?"Live AQI":"Unavailable"}</span><button onClick={()=>setShowStations(v=>!v)} className="text-[10px] px-2.5 py-1 rounded-lg text-[var(--text-secondary)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>{showStations?"Hide stations":"Show stations"}</button></div></div>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">Delhi-NCR Atmospheric Monitoring</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">{liveStations.length} backend stations · latest observations</p></div><div className="flex flex-wrap gap-2"><select value={pollutant} onChange={e=>setPollutant(e.target.value)} className="text-[10px] rounded-lg px-2 py-1.5 text-[var(--text-primary)]" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}>{["AQI","PM2.5","PM10","O3","NO2"].map(value=><option key={value}>{value}</option>)}</select><span className="flex items-center gap-1 text-[10px] text-green-400 px-2 py-1 rounded-full" style={{background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)"}}><span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400"/>{loading?"Updating…":live?"Backend data":"Unavailable"}</span><button onClick={()=>setShowStations(v=>!v)} className="text-[10px] px-2.5 py-1 rounded-lg text-[var(--text-secondary)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>{showStations?"Hide stations":"Show stations"}</button></div></div>
     <div className="relative rounded-xl overflow-hidden h-[480px]" style={{background:"#08121d",border:"1px solid var(--surface-hover)"}}>
       <div className="absolute inset-0 overflow-hidden" style={{filter:layer==="dark"?"brightness(.62) invert(.88) hue-rotate(180deg) saturate(.78) contrast(1.18)":"none",transition:"filter .35s ease"}}>{tiles.map(t=><img key={t.key} alt="NCR map tile" src={`https://tile.openstreetmap.org/${zoom}/${t.x}/${t.y}.png`} className="absolute w-64 h-64" style={{left:t.left,top:t.top,maxWidth:"none"}} onError={e=>{e.currentTarget.style.opacity=.25}}/> )}</div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,transparent_0,rgba(2,8,23,.2)_70%)] pointer-events-none"/><div className="absolute inset-0 pointer-events-none" style={{background:"radial-gradient(circle at 24% 38%,rgba(34,197,94,.10),transparent 13%),radial-gradient(circle at 57% 47%,rgba(234,179,8,.08),transparent 14%),radial-gradient(circle at 72% 42%,rgba(239,68,68,.10),transparent 13%),radial-gradient(circle at 45% 66%,rgba(249,115,22,.08),transparent 12%)",mixBlendMode:layer==="dark"?"screen":"multiply",opacity:.9}}/>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,transparent_0,rgba(2,8,23,.2)_70%)] pointer-events-none"/><div className="absolute inset-0 pointer-events-none" style={{background:"radial-gradient(circle at 24% 38%,rgba(34,197,94,.10),transparent 13%),radial-gradient(circle at 57% 47%,rgba(234,179,8,.08),transparent 14%),radial-gradient(circle at 72% 42%,rgba(239,68,68,.10),transparent 13%),radial-gradient(circle at 45% 66%,rgba(249,115,22,.08),transparent 12%)",mixBlendMode:layer==="dark"?"screen":"multiply",opacity:.9}}/><div className="absolute inset-0 pointer-events-none" style={{mixBlendMode:"screen",opacity:.28}}>{liveStations.map(station=>{const p=markerPos(station);const c=pollutantColour(station);return <span key={`heat-${station.station_id}`} className="absolute rounded-full blur-2xl" style={{left:p.left-34,top:p.top-34,width:68,height:68,background:`radial-gradient(circle,${c}aa,transparent 70%)`}}/>})}</div>
+      {showBoundary && <div className="absolute inset-[10%] rounded-[42%] border border-cyan-300/30 pointer-events-none"/>}
+      {showWind && <div className="absolute inset-0 pointer-events-none opacity-60">{[[18,28,30,34],[34,40,46,46],[52,52,64,58],[68,35,80,41],[28,68,40,74]].map(([x1,y1,x2,y2], index)=><span key={`wind-${index}`} className="absolute border-t border-dashed border-cyan-300/70" style={{left:`${x1}%`,top:`${y1}%`,width:`${x2-x1}%`,transform:`rotate(${index % 2 ? 12 : 7}deg)`}}/>)}</div>}
+      {showFires && <div className="absolute left-[6%] top-[18%] flex gap-2 pointer-events-none"><Flame size={12} className="text-orange-400"/><Flame size={10} className="text-red-400"/><span className="text-[9px] text-orange-200">Fire Hotspots · Prototype / Simulated</span></div>}
 
       {/* Station markers — one per backend station, visible regardless of obs availability */}
       {showStations && liveStations.map(s => {
         const p = markerPos(s);
-        const c = aqiColour(s.aqi);
+        const c = pollutantColour(s);
         const isSelected = selected?.station_id === s.station_id;
         const sz = isSelected ? 32 : 26;
         return (
@@ -842,7 +844,7 @@ function NcrMapPanel() {
                 {s.aqi != null ? Math.round(s.aqi) : "—"}
               </span>
             </span>
-            <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 whitespace-nowrap text-[9px] font-semibold text-[var(--text-primary)] drop-shadow-lg">{s.name}</span>
+            <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block whitespace-nowrap text-[9px] font-semibold text-[var(--text-primary)] drop-shadow-lg">{s.name}</span>
           </button>
         );
       })}
@@ -868,23 +870,26 @@ function NcrMapPanel() {
               <div>
                 <p className="text-[9px] text-[var(--text-muted)]">PM2.5</p>
                 <p className="text-[10px] text-[var(--text-primary)] font-semibold">
-                  {selected.pm25 != null ? `${Math.round(selected.pm25)} µg/m³` : "—"}
+                  {selected.pm25 != null ? `${Math.round(selected.pm25)} µg/m³` : "No observation"}
                 </p>
               </div>
               <div>
                 <p className="text-[9px] text-[var(--text-muted)]">Agency</p>
-                <p className="text-[10px] text-[var(--text-primary)] font-semibold">{selected.agency ?? "—"}</p>
+                <p className="text-[10px] text-[var(--text-primary)] font-semibold">{selected.agency ?? "No observation"}</p>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {[['Station ID', selected.station_id], ['City', selected.city], ['State', selected.state], ['PM10', selected.pm10], ['O3', selected.o3], ['NO2', selected.no2], ['Timestamp', selected.timestamp]].map(([label, value]) => <div key={label}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-[10px] text-[var(--text-primary)] font-semibold">{value == null ? "No observation" : label === "Timestamp" ? new Date(value).toLocaleString("en-IN") : ['Station ID', 'City', 'State'].includes(label) ? value : `${Math.round(value)} µg/m³`}</p></div>)}
             </div>
           </div>
         );
       })()}
 
       <div className="absolute top-3 right-3 flex flex-col gap-1"><button onClick={()=>setZoom(z=>Math.min(12,z+1))} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><ZoomIn size={14}/></button><button onClick={()=>setZoom(z=>Math.max(9,z-1))} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><ZoomOut size={14}/></button><button onClick={()=>setZoom(10)} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><Crosshair size={14}/></button></div>
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1 p-1 rounded-lg" style={{background:"var(--surface)",border:"1px solid rgba(255,255,255,.1)"}}><button onClick={()=>setLayer("dark")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="dark"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Dark</button><button onClick={()=>setLayer("light")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="light"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Light</button></div>
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex flex-wrap gap-1 p-1 rounded-lg" style={{background:"var(--surface)",border:"1px solid rgba(255,255,255,.1)"}}><button onClick={()=>setLayer("dark")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="dark"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Dark</button><button onClick={()=>setLayer("light")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="light"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Light</button><button onClick={()=>setShowWind(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showWind?"text-cyan-300 bg-cyan-500/10":"text-[var(--text-muted)]"}`}>Wind</button><button onClick={()=>setShowFires(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showFires?"text-orange-300 bg-orange-500/10":"text-[var(--text-muted)]"}`}>Fire Hotspots</button><button onClick={()=>setShowBoundary(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showBoundary?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>NCR Boundary</button></div>
       <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-2">
         <div className="rounded-lg px-3 py-2 text-[9px] text-[var(--text-secondary)]" style={{background:"rgba(2,12,7,.9)"}}>
-          NCR coverage · {liveStations.length} monitoring points{live ? " · live" : ""}
+          {pollutant} intensity · NCR coverage · {liveStations.length} monitoring points{live ? " · demo" : ""}
         </div>
         {[["#22c55e","Good ≤50"],["#eab308","Moderate ≤100"],["#f97316","Unhealthy ≤200"],["#ef4444","Poor ≤300"],["#a855f7","Severe >300"]].map(([c,l])=>(
           <span key={l} className="flex items-center gap-1 px-2 py-1 rounded text-[9px] text-[var(--text-secondary)]" style={{background:"rgba(2,12,7,.9)"}}>
@@ -931,8 +936,7 @@ function QuickActions({ onAction }) {
 function Footer() {
   return (
     <footer className="mt-8 py-5 px-1 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[var(--border)]">
-      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><Activity size={13} className="text-cyan-500"/><span>Built by <span className="font-bold text-emerald-300 tracking-wide">ASYNC AWAIT ❤️</span></span></div>
-      <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]"><span>Delhi-NCR Air Intelligence</span><span>·</span><span>Explainable Air Quality Forecasting</span></div>
+      <span className="text-xs text-[var(--text-muted)]">Built by 4SKY ❤️</span>
     </footer>
   );
 }
@@ -958,21 +962,45 @@ function FeatureSection({ id, icon, title, subtitle, children }) {
 }
 
 function ReportsSection() {
+  const { stations, loading } = useLiveStations();
   const [type,setType]=useState("Executive AQI Report");
   const [range,setRange]=useState("72 hours");
   const [generated,setGenerated]=useState(false);
-  const downloadReport = () => {
-    const rows = [
+  const station = stations.find(s=>s.hasObs===true) || stations.find(s=>s.aqi!=null) || stations[0] || null;
+  const [forecast,setForecast]=useState([]);
+
+  useEffect(()=>{
+    if(!station?.station_id){setForecast([]);return undefined;}
+    let alive=true;
+    apiGet(`/forecast/${encodeURIComponent(station.station_id)}?hours=72`)
+      .then(data=>alive&&setForecast(Array.isArray(data?.hourly)?data.hourly:[]))
+      .catch(()=>alive&&setForecast([]));
+    return()=>{alive=false;};
+  },[station?.station_id]);
+
+  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null;};
+  const currentAqi=num(station?.aqi);
+  const currentPm25=num(station?.pm25);
+  const forecastAqis=forecast.map(r=>num(r?.aqi_computed)).filter(v=>v!=null);
+  const peak=forecastAqis.length?Math.max(...forecastAqis):null;
+  const low=forecastAqis.length?Math.min(...forecastAqis):null;
+  const downloadReport=()=>{
+    const rows=[
       ["AeroAQI Report","Delhi-NCR"],["Report Type",type],["Range",range],
-      ["Current AQI","182"],["Primary Pollutant","PM2.5"],["PM2.5","104 µg/m³"],
-      ["Peak Forecast AQI","192"],["Lowest Forecast AQI","138"],["Plume Risk","High"],["Generated",new Date().toLocaleString("en-IN")],
+      ["Station",station?.name||"No station"],["Station ID",station?.station_id||""],
+      ["Current AQI",currentAqi==null?"No observation":currentAqi],
+      ["PM2.5",currentPm25==null?"No observation":`${currentPm25} µg/m³`],
+      ["Peak Forecast AQI",peak==null?"No forecast":peak],
+      ["Lowest Forecast AQI",low==null?"No forecast":low],
+      ["Generated",new Date().toLocaleString("en-IN")]
     ];
-    const csv = rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}); const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url; a.download="aeroaqi-delhi-ncr-report.csv"; a.click(); URL.revokeObjectURL(url);
+    const a=document.createElement("a");a.href=url;a.download="aeroaqi-delhi-ncr-report.csv";a.click();URL.revokeObjectURL(url);
   };
   const generate=()=>{setGenerated(false);window.setTimeout(()=>setGenerated(true),700)};
-  return <FeatureSection id="reports-section" icon={<FileText size={17} className="text-cyan-400"/>} title="Reports & Analytics" subtitle="Turn forecast intelligence into a judge-ready report">
+  const fmt=v=>v==null?"No observation":Number(v).toFixed(1);
+  return <FeatureSection id="reports-section" icon={<FileText size={17} className="text-cyan-400"/>} title="Reports & Analytics" subtitle="Turn backend station and forecast intelligence into a judge-ready report">
     <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
       <div className="space-y-3">
         <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
@@ -992,10 +1020,10 @@ function ReportsSection() {
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[['Current AQI','182','Unhealthy','#ef4444'],['Peak Forecast','192','+6 hours','#a855f7'],['PM2.5','104 µg/m³','Primary pollutant','#86efac'],['Plume Risk','High','Punjab → Delhi','#f97316']].map(([k,v,sub,c])=><div key={k} className="rounded-xl p-4" style={{background:"linear-gradient(145deg,rgba(8,37,26,.8),rgba(5,22,16,.85))",border:"1px solid rgba(74,222,128,.08)"}}><p className="text-[10px] text-[var(--text-muted)]">{k}</p><p className="text-2xl font-black mt-2" style={{color:c}}>{v}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">{sub}</p></div>)}
+        {[["Current AQI",currentAqi==null?"—":Math.round(currentAqi),currentAqi==null?"No observation":aqiLabel(currentAqi),aqiColor(currentAqi??0)],["Peak Forecast",peak==null?"—":Math.round(peak),forecast.length?"72h backend forecast":"No forecast",aqiColor(peak??0)],["PM2.5",currentPm25==null?"—":`${fmt(currentPm25)} µg/m³`,currentPm25==null?"No observation":"Latest backend observation","#86efac"],["Stations",String(stations.length||0),loading?"Loading backend":"Backend station count","#22d3ee"]].map(([k,v,sub,c])=><div key={k} className="rounded-xl p-4" style={{background:"linear-gradient(145deg,rgba(8,37,26,.8),rgba(5,22,16,.85))",border:"1px solid rgba(74,222,128,.08)"}}><p className="text-[10px] text-[var(--text-muted)]">{k}</p><p className="text-2xl font-black mt-2" style={{color:c}}>{v}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">{sub}</p></div>)}
         <div className="col-span-2 lg:col-span-4 rounded-xl p-4" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
-          <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold text-[var(--text-primary)]">Analytics snapshot</p><p className="text-[10px] text-[var(--text-muted)]">AQI trend · source risk · atmospheric conditions</p></div><span className="text-[9px] text-green-400 flex items-center gap-1"><ShieldCheck size={12}/>Ready for export</span></div>
-          <div className="grid grid-cols-3 gap-2">{[["Forecast confidence","84%"],["Stations reporting","28 / 38"],["Data freshness","8 min"]].map(([a,b])=><div key={a} className="p-3 rounded-lg" style={{background:"rgba(2,8,23,.35)"}}><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-sm font-bold text-[var(--text-primary)] mt-1">{b}</p></div>)}</div>
+          <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold text-[var(--text-primary)]">Analytics snapshot</p><p className="text-[10px] text-[var(--text-muted)]">Selected backend station · forecast range · data freshness</p></div><span className="text-[9px] text-green-400 flex items-center gap-1"><ShieldCheck size={12}/>{station?"Backend data":"Waiting for backend"}</span></div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{[["Station",station?.name||"—"],["Station ID",station?.station_id||"—"],["Forecast rows",forecast.length||"—"],["Lowest AQI",low==null?"—":Math.round(low)]].map(([a,b])=><div key={a} className="p-3 rounded-lg" style={{background:"rgba(2,8,23,.35)"}}><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-sm font-bold text-[var(--text-primary)] mt-1 truncate">{b}</p></div>)}</div>
         </div>
       </div>
     </div>
@@ -1004,7 +1032,7 @@ function ReportsSection() {
 
 function PipelineSection() {
   const stages=[
-    ["Data Sources","CPCB / OpenAQ · Open-Meteo · FIRMS","Live inputs"],
+    ["Data Sources","AeroAQI backend observations and forecast endpoints","Live inputs"],
     ["Ingestion","Validation + timestamp sync","Normalizing"],
     ["Database","Unified master dataset","Stored"],
     ["Features","Weather + PBL + inversion + fire risk","Derived"],
@@ -1084,6 +1112,8 @@ function MotionBackdrop(){
 }
 
 function AeroMotionStyles(){return <style>{`
+/* AeroAQI readability overrides */
+.aero-readable{color:#cbd5e1}.aero-readable .metric-value{color:#f1f5f9!important}.aero-readable .metric-label{color:#94a3b8!important}.aero-readable .section-title{color:#e2e8f0!important}.aero-readable table th{color:#94a3b8!important}.aero-readable table td{color:#cbd5e1!important}.aero-readable button{color:inherit}.aero-readable select{color:var(--text-primary)}.aero-readable button:hover{color:var(--text-primary)}
 @keyframes aeroShimmer{0%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
 @keyframes aeroOrbit{from{transform:rotate(0deg) translateX(12px) rotate(0deg)}to{transform:rotate(360deg) translateX(12px) rotate(-360deg)}}
 .science-card{background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.018));border:1px solid rgba(255,255,255,.055);transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;position:relative;overflow:hidden}.science-card:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent,var(--surface-hover),transparent);transform:translateX(-120%);animation:aeroShimmer 5s ease-in-out infinite}.science-card:hover{transform:translateY(-3px);border-color:rgba(34,211,238,.2);box-shadow:0 16px 40px rgba(0,0,0,.2),0 0 24px rgba(34,211,238,.05)}
@@ -1130,7 +1160,19 @@ function AeroMotionStyles(){return <style>{`
 .auth-info{margin-top:.1rem;border-radius:12px;padding:.7rem .8rem;font-size:.7rem;color:#a5f3fc;background:rgba(6,182,212,.07);border:1px solid rgba(34,211,238,.15);display:flex;align-items:center;gap:.45rem}
 @media (pointer:coarse){.auth-motion .auth-grid,.auth-motion .auth-orb,.auth-motion .auth-stars{transform:none}.auth-cursor-glow{display:none}}
 @media (prefers-reduced-motion:reduce){.auth-motion{display:none}.auth-feature-card,.auth-mini-card,.auth-input{transition:none}.auth-stars i{animation:none}}
-
+/* Final visual cleanup: preserve the India Gate photograph instead of washing it out. */
+.aero-hero-copy h2{color:#f8fafc!important;text-shadow:0 2px 18px rgba(0,0,0,.35)}
+.aero-hero-copy p{color:#cbd5e1!important}
+.aero-hero-copy .glass{background:rgba(2,8,23,.48)!important;border-color:rgba(148,163,184,.18)!important}
+.aero-hero-copy .glass span{color:#e2e8f0!important}
+.aero-hero-image{filter:brightness(.96) saturate(1.10) contrast(1.05)}
+.auth-hero-image{filter:brightness(.72) saturate(1.08) contrast(1.06)}
+/* Darker, easier-to-read typography: avoid pure white text across the dashboard. */
+.text-white{color:#cbd5e1!important}
+.aero-hero-copy h2{color:#e2e8f0!important}
+.aero-hero-copy p{color:#b8c4d4!important}
+.aero-hero-copy .glass span{color:#cbd5e1!important}
+.source-pill{color:#7dd3fc!important}
 
 .aero-bright-ui{font-size:1.04em}.aero-bright-ui h1{letter-spacing:-.02em}.aero-bright-ui h2{letter-spacing:-.015em}.aero-glow-card{box-shadow:0 10px 35px rgba(16,185,129,.08),0 0 28px rgba(34,211,238,.045)}.aero-shine{position:relative;overflow:hidden}.aero-shine:before{content:"";position:absolute;top:-20%;bottom:-20%;left:-35%;width:18%;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:skewX(-18deg);animation:aeroShine 7s ease-in-out infinite}@keyframes aeroShine{0%,68%{left:-35%;opacity:0}74%{opacity:1}88%,100%{left:125%;opacity:0}}.aero-soft-bloom{filter:drop-shadow(0 0 12px rgba(16,185,129,.12))}
 `}</style>}
@@ -1278,8 +1320,8 @@ function AuthScreen({ onAuthenticated }) {
     <AuthMotionBackdrop/>
     <div className="relative z-10 w-full max-w-6xl grid lg:grid-cols-[1.05fr_.95fr] rounded-[30px] overflow-hidden" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-float)",backdropFilter:"blur(24px)"}}>
       <section className="relative hidden lg:flex min-h-[720px] p-10 xl:p-12 flex-col justify-between overflow-hidden">
-        <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover" style={{opacity:.48,filter:"brightness(.72) saturate(1.2)"}}/>
-        <div className="absolute inset-0" style={{background:"linear-gradient(135deg,var(--surface),var(--surface-secondary),var(--surface))"}}/>
+        <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover auth-hero-image" style={{opacity:.78}}/>
+        <div className="absolute inset-0" style={{background:"linear-gradient(90deg,rgba(2,8,23,.72),rgba(2,8,23,.28) 58%,rgba(2,8,23,.12)),linear-gradient(180deg,rgba(2,8,23,.10),rgba(2,8,23,.52))"}}/>
         <div className="relative z-10">
           <AeroBrand/>
           <div className="mt-24 max-w-xl">
@@ -1299,7 +1341,7 @@ function AuthScreen({ onAuthenticated }) {
             </div>
           </div>
         </div>
-        <div className="relative z-10 text-[11px] text-[var(--text-muted)]">Built by <span className="font-black text-emerald-300">ASYNC AWAIT ❤️</span></div>
+        <div className="relative z-10 text-[11px] text-[var(--text-muted)]">Built by <span className="font-black text-emerald-300">4SKY</span></div>
       </section>
 
       <section className="p-6 sm:p-9 xl:p-12 flex flex-col justify-center">
@@ -1769,31 +1811,83 @@ function DashboardPage({ navigate }) {
   const s=slides[slide];
   return <>
     <section className="relative overflow-hidden rounded-3xl min-h-[510px]" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-float)"}}>
-      <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover transition-all duration-1000" style={{opacity:.72,filter:"brightness(.84) saturate(1.18) contrast(1.04)"}}/>
-      <div className="absolute inset-0" style={{background:"linear-gradient(90deg,var(--surface-secondary) 0%,var(--surface) 38%,transparent 72%,var(--surface-secondary) 100%)"}}/>
+      <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover transition-all duration-1000" style={{opacity:.9,filter:"brightness(1.05) saturate(1.2) contrast(1.06)"}}/>
+      <div className="absolute inset-0" style={{background:"linear-gradient(90deg,rgba(248,250,252,.9) 0%,rgba(248,250,252,.68) 34%,rgba(248,250,252,.12) 72%,rgba(248,250,252,.38) 100%)"}}/>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,rgba(34,197,94,.06),transparent_32%),linear-gradient(180deg,transparent,var(--surface-secondary))]"/>
       <div className="relative z-10 p-6 sm:p-9 lg:p-10 max-w-[720px] min-h-[510px] flex flex-col justify-center">
         <div className="flex items-center gap-2 mb-4"><span className="w-2 h-2 rounded-full bg-cyan-300 live-dot"/><span className="text-[10px] font-black tracking-[.25em] text-emerald-300">{s.ey}</span></div>
         <div key={slide} className="animate-fade-in"><h2 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[.95] tracking-tight text-[var(--text-primary)]">{s.title}<br/><span className="text-emerald-300">{s.accent}</span></h2><p className="mt-5 text-sm sm:text-base text-[var(--text-secondary)] max-w-xl leading-relaxed">{s.sub}</p><div className="flex flex-wrap gap-3 mt-7"><button onClick={()=>navigate(s.path)} className="btn-primary px-5 py-3 rounded-xl text-xs font-bold flex items-center gap-2">{s.cta}<ArrowUpRight size={14}/></button><button onClick={()=>navigate('/map')} className="px-5 py-3 rounded-xl text-xs font-bold text-[var(--text-primary)]" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(10px)"}}>Explore NCR Map</button></div></div>
         <div className="flex items-center gap-2 mt-8">{slides.map((_,i)=><button key={i} onClick={()=>setSlide(i)} className="h-1.5 rounded-full transition-all" style={{width:i===slide?34:10,background:i===slide?"#22c55e":"rgba(255,255,255,.35)"}}/>)}<span className="text-[9px] text-[var(--text-muted)] ml-2">Auto carousel</span></div>
       </div>
-      <div className="absolute right-5 top-5 hidden xl:flex gap-2 animate-float"><div className="rounded-xl px-3 py-2" style={{background:"var(--surface)",border:"1px solid rgba(74,222,128,.15)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">Current AQI</p><p className="text-xl font-black text-red-400">182</p></div><div className="rounded-xl px-3 py-2" style={{background:"var(--surface)",border:"1px solid rgba(74,222,128,.15)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">72h peak</p><p className="text-xl font-black text-purple-300">192</p></div></div>
+      <div className="absolute right-5 top-5 hidden xl:flex gap-2 animate-float"><div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.88)",border:"1px solid rgba(74,222,128,.25)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">Current AQI</p><p className="text-xl font-black text-red-400">{currentAqi == null ? "—" : Math.round(currentAqi)}</p></div><div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.88)",border:"1px solid rgba(74,222,128,.25)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">72h peak</p><p className="text-xl font-black text-purple-600">{dashboardForecast.length ? Math.max(...dashboardForecast.map(row => row.aqi).filter(value => value != null)) : "—"}</p></div></div>
       <div className="absolute bottom-0 left-0 right-0 h-16 flex items-center gap-5 px-6 overflow-hidden" style={{background:"var(--surface-secondary)",backdropFilter:"blur(10px)",borderTop:"1px solid rgba(74,222,128,.08)"}}><div className="flex gap-8 whitespace-nowrap animate-marquee text-[10px] text-[var(--text-secondary)]"><span>🟢 Good 0–50</span><span>🟡 Moderate 51–100</span><span>🟠 Sensitive 101–150</span><span>🔴 Unhealthy 151–200</span><span>🟣 Very Unhealthy 201–300</span><span>🌬 Wind transports pollution</span><span>🔥 Biomass burning can affect PM2.5</span></div></div>
     </section>
     <KpiStrip/>
+
+    {/* Keep the live station data AND the NCR map on the same Dashboard page.
+        The map reads the same backend station/observation source and does not
+        replace or hide the KPI/forecast data below. */}
+    <div className="mt-5">
+      <NcrMapPanel/>
+    </div>
+
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5"><FeatureSection icon={<BarChart3 size={18} className="text-purple-400"/>} title="Forecast Preview" subtitle="Open the full 72-hour prediction page"><div className="h-[250px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={dashboardForecast} margin={{top:5,right:5,left:-25,bottom:0}}><defs><linearGradient id="dash-aqi" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={.32}/><stop offset="95%" stopColor="#22c55e" stopOpacity={.01}/></linearGradient></defs><XAxis dataKey="t" hide/><YAxis hide/><Tooltip content={<ForecastTooltip/>}/><Area type="monotone" dataKey="aqi" stroke="#22c55e" strokeWidth={2} fill="url(#dash-aqi)"/></AreaChart></ResponsiveContainer></div><button onClick={()=>navigate('/forecast')} className="btn-primary w-full py-2.5 rounded-xl text-xs font-bold">Open AQI Forecast →</button></FeatureSection><AlertsPanel/></div>
     <QuickActions onAction={navigate}/>
   </>;
 }
 
 function AIInsightsPage(){
-  const [question,setQuestion]=useState(""); const [answer,setAnswer]=useState(""); const [busy,setBusy]=useState(false);
-  const ask=async()=>{setBusy(true);setAnswer("");try{const stations=await apiGet("/stations");const rows=Array.isArray(stations)?stations:(stations?.data||stations?.stations||[]);const station=rows[0];if(!station)throw new Error("NO_STATION");const id=station.station_id||station.id||station.name;const r=await apiGet(`/forecast/${encodeURIComponent(id)}/explain`);setAnswer(r?.explanation||r?.message||r?.summary||JSON.stringify(r));}catch{setAnswer("Backend explainability data is unavailable right now. Connect the forecast/explain endpoint to see real model reasoning here.")}finally{setBusy(false)}};
+  const [question,setQuestion]=useState(""); const [answer,setAnswer]=useState(""); const [busy,setBusy]=useState(false); const {stations}=useLiveStations();
+  const ask=async()=>{setBusy(true);setAnswer("");try{const station=stations[0];if(!station)throw new Error("NO_STATION");let r;
+      try {
+        r = await apiPost("/gemini/chat", {
+          question: question.trim() || "Explain the current AQI and the main factors affecting it.",
+          station_id: station.station_id,
+        });
+      } catch (chatError) {
+        // Keep compatibility with the original backend route if /gemini/chat is not deployed yet.
+        r = await apiGet(`/gemini/explain/${encodeURIComponent(station.station_id)}`);
+      }
+      setAnswer(r?.answer || r?.explanation || r?.message || JSON.stringify(r));}catch{setAnswer("Gemini is unavailable right now. Check the AeroAQI backend and GEMINI_API_KEY.")}finally{setBusy(false)}};
   return <><PageHeader title="AI Insights" subtitle="Explainable air intelligence powered by the same backend forecast features." action={<button onClick={ask} disabled={busy} className="btn-primary px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2"><Sparkles size={13}/>{busy?"Reading model…":"Generate insight"}</button>}/><div className="grid grid-cols-1 xl:grid-cols-[1.25fr_.75fr] gap-5"><FeatureSection icon={<Bot size={18} className="text-emerald-300"/>} title="AeroAQI Explainable Forecast" subtitle="Real forecast explanation · feature contribution · confidence"><div className="rounded-2xl p-5" style={{background:"linear-gradient(145deg,var(--surface-secondary),var(--surface))",border:"1px solid rgba(74,222,128,.13)"}}><div className="science-ring"><Bot size={28} className="text-emerald-300"/></div><p className="text-xs font-bold text-[var(--text-primary)] mt-4">Backend reasoning</p><p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">{answer||"Ask AeroAQI AI to fetch the real model explanation from FastAPI."}</p></div></FeatureSection><FeatureSection icon={<MessageCircle size={18} className="text-emerald-300"/>} title="Ask AeroAQI AI" subtitle="Ask about the current forecast"><textarea value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Why may AQI rise in the next 12 hours?" className="w-full min-h-[120px] rounded-xl p-3 text-xs text-[var(--text-primary)] outline-none resize-none" style={{background:"var(--surface)",border:"1px solid rgba(74,222,128,.12)"}}/><button onClick={ask} disabled={busy} className="btn-primary w-full mt-3 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2"><Send size={13}/> {busy?"Analyzing…":"Explain with backend AI"}</button></FeatureSection></div></>;
 }
 
+function MapInsightsPanel() {
+  const {stations, loading} = useLiveStations();
+  const station = stations[0];
+  const [forecast, setForecast] = useState([]);
+  useEffect(() => {
+    if (!station?.station_id) return undefined;
+    let alive = true;
+    apiGet(`/forecast/${encodeURIComponent(station.station_id)}?hours=72`).then(data => alive && setForecast(data?.hourly ?? [])).catch(() => alive && setForecast([]));
+    return () => { alive = false; };
+  }, [station?.station_id]);
+  const fmt = value => value == null ? "No observation" : Number(value).toFixed(1);
+  const fireRows = (stations.slice(0, 4)).map((item, index) => ({time: new Date(Date.now() - index * 3600000).toLocaleTimeString("en-IN", {hour:"2-digit", minute:"2-digit"}), lat: item.lat, lon: item.lon, frp: 18 + index * 7, location: item.city || item.name}));
+  return <div className="space-y-4">
+    <div className="rounded-2xl p-4" style={{background:"linear-gradient(145deg,rgba(8,37,26,.92),rgba(5,22,16,.9))",border:"1px solid rgba(74,222,128,.14)"}}>
+      <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p><p className="text-[10px] text-[var(--text-muted)]">Predicted pollution movement</p></div><span className="source-pill">Prototype / Simulated</span></div>
+      <div className="grid grid-cols-3 gap-1 mt-4 text-[9px] text-[var(--text-muted)]">{["Now","+12h","+24h","+36h","+48h","+72h"].map(label=><span key={label} className="rounded-md px-2 py-2 text-center" style={{background:"rgba(255,255,255,.04)"}}>{label}</span>)}</div>
+      <div className="grid grid-cols-3 gap-2 mt-3">{[["Fire Count","12"],["PM2.5 contribution","18%"],["Dominant wind","WNW"]].map(([label,value])=><div key={label} className="rounded-lg p-2" style={{background:"rgba(255,255,255,.035)"}}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{value}</p></div>)}</div>
+      <div className="mt-3 rounded-lg p-2 text-[9px] text-[var(--text-muted)]" style={{background:"rgba(249,115,22,.07)"}}>Plume impact: <b className="text-orange-300">Moderate</b> · Prototype / Simulated</div>
+      <p className="text-[10px] font-bold text-[var(--text-primary)] mt-4 mb-2">Recent Fire Detections</p><div className="overflow-x-auto"><table className="w-full text-[9px]"><thead><tr className="text-left text-[var(--text-muted)]">{["Time","Latitude","Longitude","FRP","Location"].map(label=><th key={label} className="px-1 py-1">{label}</th>)}</tr></thead><tbody>{fireRows.map(row=><tr key={`${row.time}-${row.lat}`} className="border-t border-white/[.06] text-[var(--text-secondary)]"><td className="px-1 py-1">{row.time}</td><td className="px-1 py-1">{row.lat.toFixed(3)}</td><td className="px-1 py-1">{row.lon.toFixed(3)}</td><td className="px-1 py-1">{row.frp}</td><td className="px-1 py-1">{row.location}</td></tr>)}</tbody></table></div>
+    </div>
+    <div className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><p className="text-xs font-bold text-[var(--text-primary)] mb-3">72-Hour Forecast · {station?.name || (loading ? "Loading" : "No station")}</p><div className="grid grid-cols-3 gap-2">{[["Current AQI",forecast[0]?.aqi_computed], ["Peak AQI",forecast.length?Math.max(...forecast.map(row=>Number(row.aqi_computed)).filter(Number.isFinite)):null], ["Forecast rows",forecast.length || null]].map(([label,value])=><div key={label} className="rounded-lg p-2" style={{background:"var(--surface-secondary)"}}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-sm font-black text-[var(--text-primary)] mt-1">{value == null ? "No observation" : typeof value === "number" ? fmt(value) : value}</p></div>)}</div></div>
+  </div>;
+}
+
+function MapBottomInsights() {
+  const {stations} = useLiveStations();
+  const station = stations[0];
+  return <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">{[
+    ["Air Quality at a Glance", [["AQI",station?.aqi],["PM2.5",station?.pm25],["PM10",station?.pm10],["O3",station?.o3],["NO2",station?.no2],["Temperature",station?.temperature_c],["Humidity",station?.humidity],["Wind",station?.wind_speed_ms],["PBL Height",null],["Last updated",station?.timestamp ? new Date(station.timestamp).toLocaleString("en-IN", {timeZone:"Asia/Kolkata"}) : null]]],
+    ["72-Hour Forecast", [["Station",station?.name],["Station ID",station?.station_id],["Source","AeroAQI backend"],["Horizon","72 hours"]]],
+    ["Meteorological Conditions", [["Wind",station?.wind_speed_ms],["Temperature",station?.temperature_c],["PBL Height","Backend forecast"],["Relative Humidity",station?.humidity]]]
+  ].map(([title,items])=><div key={title} className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><p className="text-sm font-bold text-[var(--text-primary)] mb-3">{title}</p><div className="grid grid-cols-2 gap-2">{items.map(([label,value])=><div key={label}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-xs font-semibold text-[var(--text-primary)] mt-1">{value == null ? "No observation" : typeof value === "number" ? value.toFixed(1) : value}</p></div>)}</div></div>)}</div>;
+}
+
 function MapPage() {
-  return <><PageHeader title="Delhi-NCR Air Quality Map" subtitle="Interactive spatial AQI view across Delhi and the surrounding NCR region."/><NcrMapPanel/></>;
+  return <>  <PageHeader title="Delhi-NCR Atmospheric Monitoring" subtitle="Backend station AQI, pollutant intensity, plume movement and forecast intelligence."/><div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start"><NcrMapPanel/><MapInsightsPanel/></div><div className="mt-4"><MapBottomInsights/></div></>;
 }
 function WeatherPage() {
   return <><PageHeader title="Weather & Atmosphere" subtitle="Meteorological and atmospheric factors that influence pollution dispersion."/><WeatherPanel/></>;
@@ -1830,13 +1924,13 @@ function StationsPage(){
   // dot map includes "unknown" for stations without obs data
   const dot={good:"#22c55e",moderate:"#eab308",sensitive:"#f97316",unhealthy:"#ef4444",very:"#a855f7",unknown:"#64748b"};
   return <><PageHeader title="Monitoring Stations" subtitle="NCR monitoring network — inspect local AQI, pollutants, source and weather context." action={<span className="source-pill">{loading?"Updating…":live?"LIVE · AeroAQI Backend":"Unavailable"}</span>}/><div className="grid grid-cols-1 xl:grid-cols-[330px_1fr] gap-5">
-    <FeatureSection icon={<Navigation size={18} className="text-emerald-300"/>} title="NCR Station Network" subtitle={`${filtered.length} monitoring points`}>
+    <FeatureSection icon={<Navigation size={18} className="text-emerald-300"/>} title="NCR Station Network" subtitle={`${filtered.length} of ${stations.length} monitoring points`}>
       <div className="relative mb-3"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search station or city" className="w-full rounded-xl pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] outline-none" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}/></div>
-      <div className="space-y-2 max-h-[570px] overflow-y-auto pr-1">{filtered.map(s=><button key={s.station_id||s.name} onClick={()=>setSelected(s)} className="w-full p-3 rounded-xl text-left transition-all hover:translate-x-1" style={{background:selected?.station_id===s.station_id?"rgba(34,211,238,.08)":"var(--surface-secondary)",border:`1px solid ${selected?.station_id===s.station_id?"rgba(34,211,238,.2)":"var(--surface-hover)"}`}}><div className="flex items-center justify-between"><div><p className="text-xs font-bold text-[var(--text-primary)]">{s.name}</p><p className="text-[9px] text-[var(--text-muted)]">{Number.isFinite(s.lat)?s.lat.toFixed(3):"—"}, {Number.isFinite(s.lon)?s.lon.toFixed(3):"—"}</p></div><div className="text-right"><p className="text-lg font-black" style={{color:dot[s.status]||"#64748b"}}>{s.aqi!=null?s.aqi:"—"}</p><p className="text-[8px] text-[var(--text-muted)]">AQI</p></div></div></button>)}</div>
+      <div className="space-y-2 max-h-[570px] overflow-y-auto pr-1">{filtered.map(s=><button key={s.station_id||s.name} onClick={()=>setSelected(s)} className="w-full p-3 rounded-xl text-left transition-all hover:translate-x-1" style={{background:selected?.station_id===s.station_id?"rgba(34,211,238,.08)":"var(--surface-secondary)",border:`1px solid ${selected?.station_id===s.station_id?"rgba(34,211,238,.2)":"var(--surface-hover)"}`}}><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-xs font-bold text-[var(--text-primary)] truncate">{s.name}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.station_id} · {s.city||"No city"}, {s.state||"No state"}</p><p className="text-[9px] text-[var(--text-muted)]">{Number.isFinite(s.lat)?s.lat.toFixed(4):"No observation"}, {Number.isFinite(s.lon)?s.lon.toFixed(4):"No observation"}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.agency||"No observation"} · {s.timestamp?new Date(s.timestamp).toLocaleString("en-IN"):"No observation"}</p><p className="text-[9px] text-[var(--text-secondary)] mt-1">PM2.5 {s.pm25!=null?Math.round(s.pm25):"No observation"} · PM10 {s.pm10!=null?Math.round(s.pm10):"No observation"} · O3 {s.o3!=null?Math.round(s.o3):"No observation"} · NO2 {s.no2!=null?Math.round(s.no2):"No observation"}</p></div><div className="text-right shrink-0"><p className="text-lg font-black" style={{color:dot[s.status]||"#64748b"}}>{s.aqi!=null?s.aqi:"No observation"}</p><p className="text-[8px] text-[var(--text-muted)]">AQI</p></div></div></button>)}</div>
     </FeatureSection>
     {selected&&<FeatureSection icon={<MapPinned size={18} className="text-emerald-300"/>} title={`${selected.name} Station`} subtitle="Selected monitoring point · pollutant snapshot · local trend">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[["AQI",selected.aqi!=null?selected.aqi:"—",selected.aqi!=null?aqiLabel(selected.aqi):"No data",dot[selected.status]||"#64748b"],["PM2.5",selected.pm25!=null?Math.round(selected.pm25):"—","µg/m³","#38bdf8"],["PM10",selected.pm10!=null?Math.round(selected.pm10):"—","µg/m³","#a78bfa"],["NO₂",selected.no2!=null?Math.round(selected.no2):"—","µg/m³","#fb923c"]].map(([a,b,c,col])=><div key={a} className="science-card p-4 rounded-xl"><p className="text-[10px] text-[var(--text-muted)]">{a}</p><p className="text-xl font-black mt-1" style={{color:col}}>{b}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">{c}</p></div>)}</div>
-      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_.6fr] gap-4 mt-4"><div className="rounded-xl p-4" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><div className="flex items-center justify-between"><p className="text-xs font-bold text-[var(--text-primary)]">Station trend</p><span className="text-[9px] text-emerald-300">{live?"Live source":"Backend unavailable"}</span></div><div className="h-[250px] mt-3 flex items-center justify-center text-[var(--text-muted)] text-xs">Historical trend requires pipeline data</div></div><div className="rounded-xl p-4" style={{background:"linear-gradient(145deg,var(--surface-secondary),var(--surface))",border:"1px solid rgba(34,197,94,.12)"}}><p className="text-[10px] text-emerald-300 font-bold">Station details</p><div className="space-y-3 mt-4">{[["Station ID",selected.station_id||"—"],["City",selected.city||"—"],["State",selected.state||"—"],["Agency",selected.agency||"—"],["Zone",selected.zone||"—"],["Status",selected.aqi!=null?aqiLabel(selected.aqi):"No observation data"],["Coordinates",`${Number.isFinite(selected.lat)?selected.lat.toFixed(4):"—"}, ${Number.isFinite(selected.lon)?selected.lon.toFixed(4):"—"}`],["Last obs",selected.timestamp||"—"],["Source",selected.source||"—"],["Map",<button key="map" onClick={()=>window.history.pushState({},"","/map")} className="text-emerald-300 underline">Open NCR map</button>]].map(([a,b])=><div key={a}><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-xs font-semibold text-[var(--text-primary)] mt-1">{b}</p></div>)}</div></div></div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">{[["AQI",selected.aqi,null, dot[selected.status]||"#64748b"],["PM2.5",selected.pm25,null,"#38bdf8"],["PM10",selected.pm10,null,"#a78bfa"],["O3",selected.o3,null,"#34d399"],["NO₂",selected.no2,null,"#fb923c"]].map(([a,b,c,col])=><div key={a} className="science-card p-4 rounded-xl"><p className="text-[10px] text-[var(--text-muted)]">{a}</p><p className="text-xl font-black mt-1" style={{color:col}}>{b!=null?Math.round(b):"No observation"}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">{c|| (a==="AQI" ? "No observation" : "µg/m³")}</p></div>)}</div>
+      <div className="grid grid-cols-1 lg:grid-cols-[.65fr_1.35fr] gap-4 mt-4"><div className="rounded-xl p-4 flex items-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-[10px] text-[var(--text-muted)]">Historical trend is not included in the latest-observation response.</p></div><div className="rounded-xl p-4" style={{background:"linear-gradient(145deg,var(--surface-secondary),var(--surface))",border:"1px solid rgba(34,197,94,.12)"}}><p className="text-[10px] text-emerald-300 font-bold">Station details</p><div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 mt-4">{[["Station ID",selected.station_id],["Name",selected.name],["City",selected.city],["State",selected.state],["Latitude",selected.lat],["Longitude",selected.lon],["Agency",selected.agency],["Zone",selected.zone],["AQI",selected.aqi],["PM2.5",selected.pm25],["PM10",selected.pm10],["O3",selected.o3],["NO2",selected.no2],["Temperature",selected.temperature_c],["Humidity",selected.humidity],["Wind",selected.wind_speed_ms],["PBL",selected.pbl_height],["Last updated",selected.timestamp],["Source",selected.source]].map(([a,b])=><div key={a}><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-xs font-semibold text-[var(--text-primary)] mt-1">{b==null?"No observation":a==="Last updated"?new Date(b).toLocaleString("en-IN"):b}</p></div>)}</div></div></div>
     </FeatureSection>}
   </div></>;
 }
@@ -1973,133 +2067,505 @@ function WRFChemPage() {
 
 // ─── WRF-Chem Model Section ────────────────────────────────────────────────
 function WRFChemSection() {
-  const [activeParam, setActiveParam] = useState('PM2.5');
+  const [stations, setStations] = useState([]);
+  const [stationsLoading, setStationsLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [activeParam, setActiveParam] = useState("PM2.5");
+  const [showAll, setShowAll] = useState(false);
+  const [state, setState] = useState({ loading: false, data: null, error: null });
+  const [network, setNetwork] = useState({ loading: false, rows: [], error: null });
 
-  const parameters = [
-    { id: 'PM2.5', label: 'PM2.5', max: 300, unit: 'µg/m³', color: '#dc2626' },
-    { id: 'PM10', label: 'PM10', max: 400, unit: 'µg/m³', color: '#c2410c' },
-    { id: 'NO2', label: 'NO2', max: 150, unit: 'µg/m³', color: '#b91c1c' },
-    { id: 'O3', label: 'O3', max: 200, unit: 'µg/m³', color: '#4338ca' },
-    { id: 'Wind', label: 'Wind', max: 15, unit: 'm/s', color: '#0369a1' },
-    { id: 'PBL Height', label: 'PBL Height', max: 2000, unit: 'm', color: '#65a30d' }
-  ];
+  const normalizeWrfResponse = (payload, fallbackStationId) => {
+    const raw = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.forecast)
+        ? payload.forecast
+        : Array.isArray(payload?.data?.forecast)
+          ? payload.data.forecast
+          : [];
 
-  const currentParam = parameters.find(p => p.id === activeParam);
+    const forecast = raw.map((row, index) => ({
+      ...row,
+      station_id: row?.station_id ?? payload?.station_id ?? fallbackStationId,
+      forecast_hour: row?.forecast_hour ?? index,
+      timestamp_utc: row?.timestamp_utc ?? row?.target_utc ?? row?.timestamp ?? null,
+      aqi: row?.aqi ?? row?.aqi_computed ?? null,
+      pm25: row?.pm25 ?? row?.pm2_5 ?? row?.pm2_5_concentration ?? null,
+      pm10: row?.pm10 ?? row?.pm10_concentration ?? null,
+      o3: row?.o3 ?? row?.ozone ?? null,
+      no2: row?.no2 ?? row?.nitrogen_dioxide ?? null,
+      temperature_c: row?.temperature_c ?? row?.temperature ?? row?.temp_c ?? null,
+      wind_speed_ms: row?.wind_speed_ms ?? row?.wind_speed ?? row?.wind_ms ?? null,
+      boundary_layer_height_m: row?.boundary_layer_height_m ?? row?.boundary_layer_height ?? row?.pbl_height_m ?? null,
+      inversion_flag: row?.inversion_flag ?? row?.inversion ?? false,
+    }));
 
-  const getMapStyle = (param) => {
-    const bases = {
-      'PM2.5': 'radial-gradient(circle at 45% 45%, #ef4444 0%, #f97316 20%, #eab308 40%, #10b981 70%, #3b82f6 100%)',
-      'PM10': 'radial-gradient(circle at 50% 50%, #ea580c 0%, #f59e0b 25%, #84cc16 50%, #06b6d4 80%, #3b82f6 100%)',
-      'NO2': 'radial-gradient(circle at 55% 40%, #dc2626 0%, #c2410c 30%, #eab308 55%, #10b981 75%, #0ea5e9 100%)',
-      'O3': 'radial-gradient(circle at 40% 60%, #4338ca 0%, #6366f1 20%, #a855f7 45%, #f472b6 70%, #38bdf8 100%)',
-      'Wind': 'radial-gradient(circle at 60% 60%, #0284c7 0%, #0ea5e9 30%, #38bdf8 60%, #7dd3fc 90%, #e0f2fe 100%)',
-      'PBL Height': 'radial-gradient(circle at 45% 55%, #facc15 0%, #a3e635 25%, #4ade80 50%, #2dd4bf 75%, #3b82f6 100%)'
-    };
-    return {
-      background: bases[param] || bases['PM2.5'],
-      opacity: 0.85,
-      transition: 'background 0.5s ease-in-out'
-    };
+    return { ...(payload && !Array.isArray(payload) ? payload : {}), forecast };
   };
 
-  const getLegendGradient = (param) => {
-    const bases = {
-      'PM2.5': 'linear-gradient(to top, #3b82f6, #06b6d4, #84cc16, #facc15, #f97316, #ef4444)',
-      'PM10': 'linear-gradient(to top, #3b82f6, #06b6d4, #84cc16, #f59e0b, #ea580c)',
-      'NO2': 'linear-gradient(to top, #0ea5e9, #10b981, #eab308, #c2410c, #dc2626)',
-      'O3': 'linear-gradient(to top, #38bdf8, #f472b6, #a855f7, #6366f1, #4338ca)',
-      'Wind': 'linear-gradient(to top, #e0f2fe, #7dd3fc, #38bdf8, #0ea5e9, #0284c7)',
-      'PBL Height': 'linear-gradient(to top, #3b82f6, #2dd4bf, #4ade80, #a3e635, #facc15)'
+  useEffect(() => {
+    let alive = true;
+    setStationsLoading(true);
+
+    apiGet("/stations")
+      .then(payload => {
+        const raw = Array.isArray(payload)
+          ? payload
+          : (Array.isArray(payload?.stations)
+            ? payload.stations
+            : (Array.isArray(payload?.data) ? payload.data : []));
+        const normalized = raw
+          .map((s, index) => ({
+            ...s,
+            station_id: s?.station_id,
+            name: s?.name ?? s?.station_name ?? s?.station_id ?? `Station ${index + 1}`,
+            city: s?.city ?? "NCR",
+            latitude: Number(s?.latitude ?? s?.lat),
+            longitude: Number(s?.longitude ?? s?.lon),
+          }))
+          .filter(s => s.station_id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+
+        if (alive) {
+          setStations(normalized);
+          setStationsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setStations([]);
+          setStationsLoading(false);
+        }
+      });
+
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId && stations.length) setSelectedId(stations[0].station_id);
+  }, [stations, selectedId]);
+
+  // Fetch every station from the backend in small batches. No AQI/pollutant
+  // values are created in the frontend; every value below comes from WRF-Chem.
+  useEffect(() => {
+    if (!stations.length) {
+      setNetwork({ loading: false, rows: [], error: stationsLoading ? null : "0 stations returned by backend" });
+      return undefined;
+    }
+
+    let alive = true;
+    const loadNetwork = async () => {
+      setNetwork({ loading: true, rows: [], error: null });
+      const collected = [];
+      const failedIds = [];
+
+      for (let i = 0; i < stations.length; i += 5) {
+        const batch = stations.slice(i, i + 5);
+        const results = await Promise.allSettled(batch.map(async station => {
+          const payload = await apiGet(`/wrf-chem/${encodeURIComponent(station.station_id)}`);
+          const data = normalizeWrfResponse(payload, station.station_id);
+          const current = data.forecast[0] ?? null;
+          if (!current) throw new Error("No forecast rows");
+          return { station, data, current };
+        }));
+
+        if (!alive) return;
+        results.forEach((result, idx) => {
+          if (result.status === "fulfilled") collected.push(result.value);
+          else failedIds.push(batch[idx]?.station_id);
+        });
+
+        setNetwork({
+          loading: i + batch.length < stations.length,
+          rows: [...collected],
+          error: null,
+        });
+      }
+
+      if (!alive) return;
+      setNetwork({
+        loading: false,
+        rows: collected,
+        error: collected.length === 0
+          ? "WRF-Chem backend returned no rows"
+          : failedIds.length
+            ? `${collected.length}/${stations.length} stations loaded`
+            : null,
+      });
     };
-    return bases[param] || bases['PM2.5'];
+
+    loadNetwork();
+    return () => { alive = false; };
+  }, [stations, stationsLoading]);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    let alive = true;
+    setState({ loading: true, data: null, error: null });
+
+    apiGet(`/wrf-chem/${encodeURIComponent(selectedId)}`)
+      .then(payload => {
+        const data = normalizeWrfResponse(payload, selectedId);
+        if (alive) {
+          setState({
+            loading: false,
+            data,
+            error: data.forecast.length ? null : "Backend returned 0 forecast rows",
+          });
+        }
+      })
+      .catch(error => {
+        if (alive) setState({ loading: false, data: null, error: error?.message || "WRF-Chem request failed" });
+      });
+
+    return () => { alive = false; };
+  }, [selectedId]);
+
+  const fields = {
+    AQI: ["aqi", ""],
+    "PM2.5": ["pm25", "µg/m³"],
+    PM10: ["pm10", "µg/m³"],
+    O3: ["o3", "µg/m³"],
+    NO2: ["no2", "µg/m³"],
+    Wind: ["wind_speed_ms", "m/s"],
+    "PBL Height": ["boundary_layer_height_m", "m"],
   };
+  const [field, unit] = fields[activeParam];
+  const rows = state.data?.forecast ?? [];
+  const current = rows[0] ?? null;
+  const selectedStation = stations.find(s => s.station_id === selectedId);
+
+  const chartData = rows.map((row, index) => ({
+    t: index % 6 === 0
+      ? (row.timestamp_utc
+        ? new Date(row.timestamp_utc).toLocaleString("en-IN", { day: "numeric", hour: "2-digit", minute: "2-digit" })
+        : `H+${row.forecast_hour ?? index}`)
+      : "",
+    value: row[field] != null ? Number(row[field]) : null,
+  }));
+
+  const formatValue = (value, digits = 1) =>
+    value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(digits);
+
+  const aqiColour = value => {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return "#64748b";
+    if (v <= 50) return "#22c55e";
+    if (v <= 100) return "#eab308";
+    if (v <= 150) return "#f97316";
+    if (v <= 200) return "#ef4444";
+    if (v <= 300) return "#a855f7";
+    return "#b91c1c";
+  };
+
+  // Geographic projection uses station coordinates from /stations.
+  // The color at each point uses only the corresponding WRF-Chem AQI.
+  const mapMinLat = 27.95, mapMaxLat = 29.25, mapMinLon = 76.55, mapMaxLon = 78.25;
+  const mapPoint = station => ({
+    left: `${Math.max(3, Math.min(97, ((Number(station.longitude ?? station.lon) - mapMinLon) / (mapMaxLon - mapMinLon)) * 100))}%`,
+    top: `${Math.max(5, Math.min(95, (1 - (Number(station.latitude ?? station.lat) - mapMinLat) / (mapMaxLat - mapMinLat)) * 100))}%`,
+  });
 
   return (
-    <div className="mt-10 mb-6">
-      <div className="mb-5">
-        <h3 className="text-2xl font-bold text-[var(--text-primary)]">WRF-Chem Model</h3>
-        <p className="text-xs text-[var(--text-muted)] mt-1">Coupled weather-chemistry simulation (Prototype)</p>
+    <div className="aero-readable mt-10 mb-6">
+      <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <h3 className="text-2xl font-bold text-[var(--text-primary)]">WRF-Chem Model</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Backend WRF-Chem forecast · all available NCR stations</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="source-pill">
+            {stationsLoading ? "Loading stations…" : `${stations.length} stations`}
+          </span>
+          <span className="source-pill">
+            {network.loading ? `${network.rows.length}/${stations.length} WRF loading…` : `${network.rows.length}/${stations.length} WRF loaded`}
+          </span>
+          <select
+            value={selectedId ?? ""}
+            onChange={e => setSelectedId(e.target.value)}
+            disabled={stationsLoading || !stations.length}
+            className="rounded-xl px-3 py-2 text-xs outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            {!stations.length && <option value="">{stationsLoading ? "Loading stations…" : "No stations"}</option>}
+            {stations.map(station => (
+              <option key={station.station_id} value={station.station_id}>
+                {station.name || station.station_id} — {station.city || "NCR"}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {parameters.map(p => (
-          <button
-            key={p.id}
-            onClick={() => setActiveParam(p.id)}
-            className="px-6 py-2 rounded-xl text-xs font-bold transition-all duration-300"
+      {/* =========================================================
+          WRF-CHEM DATA-DRIVEN MAP
+          Coordinates = backend /stations
+          Color/value = backend /wrf-chem/{station_id}
+          ========================================================= */}
+      <div
+        className="rounded-2xl p-4 mb-6"
+        style={{ background: "var(--surface-secondary)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">WRF-Chem NCR AQI Map</p>
+            <p className="text-[10px] text-[var(--text-muted)]">Station position from backend · color and AQI from WRF-Chem first forecast hour</p>
+          </div>
+          <span className="text-[10px] font-semibold text-emerald-300">
+            {network.rows.length}/{stations.length} station data points
+          </span>
+        </div>
+
+        <div
+          className="relative h-[430px] rounded-xl overflow-hidden"
+          style={{
+            background: "linear-gradient(145deg,#071a2b,#0a2a26 52%,#111827)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-20"
             style={{
-              background: activeParam === p.id ? 'var(--text-primary)' : 'var(--surface)',
-              color: activeParam === p.id ? '#ffffff' : 'var(--text-secondary)',
-              border: activeParam === p.id ? '1px solid var(--text-primary)' : '1px solid var(--border)',
-              boxShadow: activeParam === p.id ? 'var(--shadow-sm)' : 'none'
+              backgroundImage: "linear-gradient(rgba(148,163,184,.25) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.25) 1px, transparent 1px)",
+              backgroundSize: "44px 44px",
+            }}
+          />
+
+          <div className="absolute left-3 top-3 text-[9px] text-slate-400">
+            Delhi-NCR · WRF-Chem backend
+          </div>
+
+          {network.rows.map(({ station, current: wrf }) => {
+            const point = mapPoint(station);
+            const colour = aqiColour(wrf?.aqi);
+            const active = station.station_id === selectedId;
+
+            return (
+              <button
+                key={`wrf-map-${station.station_id}`}
+                onClick={() => setSelectedId(station.station_id)}
+                title={`${station.name} · AQI ${formatValue(wrf?.aqi)}`}
+                className="absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full group"
+                style={{ left: point.left, top: point.top }}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: active ? 38 : 28,
+                    height: active ? 38 : 28,
+                    background: `${colour}33`,
+                    border: `2px solid ${colour}`,
+                    boxShadow: `0 0 18px ${colour}88`,
+                  }}
+                >
+                  <span className="text-[8px] font-black text-slate-100">
+                    {Number.isFinite(Number(wrf?.aqi)) ? Math.round(Number(wrf.aqi)) : "—"}
+                  </span>
+                </span>
+                <span
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block whitespace-nowrap rounded px-2 py-1 text-[8px] font-semibold text-slate-100"
+                  style={{ background: "rgba(2,6,23,.94)" }}
+                >
+                  {station.name}
+                </span>
+              </button>
+            );
+          })}
+
+          {network.loading && (
+            <div className="absolute right-3 top-3 rounded-lg px-2 py-1 text-[9px] text-slate-200" style={{ background: "rgba(2,6,23,.8)" }}>
+              Loading {network.rows.length}/{stations.length}…
+            </div>
+          )}
+
+          {!network.loading && !network.rows.length && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-300">
+              No WRF-Chem backend rows returned.
+            </div>
+          )}
+
+          <div className="absolute bottom-3 left-3 flex flex-wrap gap-3 text-[9px] text-slate-200 rounded-lg px-2.5 py-2" style={{ background: "rgba(2,6,23,.88)" }}>
+            {[['0–50', '#22c55e'], ['51–100', '#eab308'], ['101–150', '#f97316'], ['151–200', '#ef4444'], ['201–300', '#a855f7'], ['301+', '#b91c1c']].map(([label, colour]) => (
+              <span key={label} className="flex items-center gap-1">
+                <i className="w-2 h-2 rounded-full" style={{ background: colour }} />{label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================
+          ALL BACKEND STATIONS — CURRENT WRF-CHEM VALUES
+          ========================================================= */}
+      <div
+        className="rounded-2xl p-4 mb-6 overflow-hidden"
+        style={{ background: "var(--surface-secondary)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">All WRF-Chem Station Data</p>
+            <p className="text-[10px] text-[var(--text-muted)]">Live response rows from the AeroAQI backend · no hardcoded date or pollutant values</p>
+          </div>
+          <span className="text-xs font-bold text-emerald-400">{network.rows.length}/{stations.length}</span>
+        </div>
+
+        {network.rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-[10px]">
+              <thead>
+                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--border)]">
+                  {['#', 'Station', 'Station ID', 'AQI', 'PM2.5', 'PM10', 'O₃', 'NO₂', 'Temp', 'Wind', 'PBL', 'Inversion'].map(label => (
+                    <th key={label} className="px-2 py-3 font-semibold">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {network.rows.map(({ station, current: wrf }, index) => (
+                  <tr
+                    key={`wrf-row-${station.station_id}`}
+                    onClick={() => setSelectedId(station.station_id)}
+                    className="cursor-pointer border-b border-[var(--border)] hover:bg-white/[.025]"
+                    style={{ background: station.station_id === selectedId ? "rgba(34,211,238,.06)" : "transparent" }}
+                  >
+                    <td className="px-2 py-3 text-[var(--text-muted)]">{index + 1}</td>
+                    <td className="px-2 py-3 font-semibold text-[var(--text-primary)]">{station.name || station.station_id}</td>
+                    <td className="px-2 py-3 text-[var(--text-muted)]">{station.station_id}</td>
+                    <td className="px-2 py-3 font-black" style={{ color: aqiColour(wrf?.aqi) }}>{formatValue(wrf?.aqi)}</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.pm25)}</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.pm10)}</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.o3)}</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.no2)}</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.temperature_c)}°C</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.wind_speed_ms)} m/s</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.boundary_layer_height_m)} m</td>
+                    <td className="px-2 py-3 text-[var(--text-secondary)]">{wrf?.inversion_flag ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!network.loading && !network.rows.length && (
+          <div className="rounded-xl p-5 text-center text-xs text-amber-300" style={{ background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.16)" }}>
+            WRF-Chem backend returned 0 station rows. Make sure FastAPI is running and the Vite proxy/API base is configured.
+          </div>
+        )}
+      </div>
+
+      {/* =========================================================
+          SELECTED STATION 72-HOUR FORECAST
+          ========================================================= */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {Object.keys(fields).map(parameter => (
+          <button
+            key={parameter}
+            onClick={() => setActiveParam(parameter)}
+            className="px-4 py-2 rounded-xl text-xs font-bold transition-all"
+            style={{
+              background: activeParam === parameter ? "var(--text-primary)" : "var(--surface)",
+              color: activeParam === parameter ? "#ffffff" : "var(--text-secondary)",
+              border: "1px solid var(--border)",
             }}
           >
-            {p.label}
+            {parameter}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-        <div className="rounded-3xl p-2 relative overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
-          <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100">
-            <div className="absolute inset-0 bg-slate-200/50 map-grid" style={{ zIndex: 0 }} />
-            
-            <div className="absolute inset-0" style={{ ...getMapStyle(activeParam), mixBlendMode: 'multiply', zIndex: 1, filter: 'blur(16px)' }} />
-            
-            <div className="absolute inset-0" style={{ zIndex: 10 }}>
-              <div className="absolute top-[25%] left-[30%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md">Sonipat</div>
-              <div className="absolute top-[35%] left-[70%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-white opacity-80"/>Meerut</div>
-              <div className="absolute top-[50%] left-[20%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md">Rohtak</div>
-              <div className="absolute top-[55%] left-[45%] -translate-x-1/2 -translate-y-1/2 text-[13px] font-black text-white drop-shadow-lg">Delhi</div>
-              <div className="absolute top-[58%] left-[65%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-300 opacity-90"/>Ghaziabad</div>
-              <div className="absolute top-[75%] left-[35%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-300 opacity-90"/>Gurugram</div>
-              <div className="absolute top-[70%] left-[58%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-white opacity-80"/>Noida</div>
-              <div className="absolute top-[85%] left-[55%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-white drop-shadow-md">Faridabad</div>
-            </div>
+      {state.loading && (
+        <div className="h-[260px] flex items-center justify-center text-xs text-[var(--text-muted)]">
+          <RefreshCw size={14} className="animate-spin mr-2 text-emerald-400" />
+          Loading WRF-Chem forecast from backend…
+        </div>
+      )}
 
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2" style={{ zIndex: 20 }}>
-              <span className="text-[10px] font-bold text-[var(--text-primary)] bg-white/80 px-2 py-0.5 rounded backdrop-blur drop-shadow-sm">{currentParam.unit}</span>
-              <div className="flex gap-2 h-[200px]">
-                <div className="w-4 rounded-full border border-white/40 shadow-sm transition-all duration-500" style={{ background: getLegendGradient(activeParam) }} />
-                <div className="flex flex-col justify-between text-[10px] font-bold text-[var(--text-primary)] drop-shadow-sm px-1 py-1 h-full">
-                  <span>{currentParam.max}</span>
-                  <span>{Math.round(currentParam.max * 0.66)}</span>
-                  <span>{Math.round(currentParam.max * 0.33)}</span>
-                  <span>0</span>
+      {!state.loading && state.error && (
+        <div className="rounded-xl p-4 text-xs text-amber-300" style={{ background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.16)" }}>
+          WRF-Chem data unavailable: {state.error}
+        </div>
+      )}
+
+      {!state.loading && !state.error && state.data && rows.length > 0 && (
+        <>
+          <div className="rounded-2xl p-5 mb-5" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border)" }}>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <p className="text-lg font-black text-[var(--text-primary)]">{selectedStation?.name || selectedId}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{selectedStation?.city || "Delhi-NCR"} · {selectedId}</p>
+                <p className="text-[10px] text-[var(--text-secondary)] mt-2">{rows.length}-hour backend WRF-Chem forecast · timestamps from backend response</p>
+              </div>
+              {current && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[['AQI', current.aqi], ['PM2.5', current.pm25], ['PM10', current.pm10], ['PBL', current.boundary_layer_height_m]].map(([label, value]) => (
+                    <div key={label} className="rounded-xl p-3" style={{ background: "rgba(15,23,42,.72)", border: "1px solid rgba(148,163,184,.16)" }}>
+                      <p className="metric-label text-[9px]">{label}</p>
+                      <p className="metric-value text-sm font-black mt-1">{formatValue(value)}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-col gap-5">
-          <div className="rounded-2xl p-6" style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
-            <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4">Simulation Info</h4>
-            <div className="space-y-4">
+          <div className="rounded-3xl p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}>
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-[10px] text-[var(--text-muted)]">Model</p>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5">WRF-Chem (Prototype)</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">{activeParam} forecast</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{rows.length} hourly backend records</p>
               </div>
-              <div>
-                <p className="text-[10px] text-[var(--text-muted)]">Time</p>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5">8 Jan 2026, 10:00 AM</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--text-muted)]">Parameter</p>
-                <p className="text-xs font-bold text-[var(--text-primary)] mt-0.5">{currentParam.label}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--text-muted)]">Domain</p>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5">Delhi-NCR (d02)</p>
-              </div>
+              <span className="text-xs text-emerald-300">{unit || "AQI"}</span>
+            </div>
+
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke="var(--surface-hover)" vertical={false} />
+                  <XAxis dataKey="t" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ForecastTooltip />} />
+                  <Line type="monotone" dataKey="value" name={`${activeParam} (${unit})`} stroke="#22c55e" strokeWidth={2.5} dot={false} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          
-          <p className="text-[11px] text-[var(--text-muted)] leading-relaxed px-2">
-            WRF-Chem simulates the interaction between weather and atmospheric chemistry to predict pollutant concentrations.
-          </p>
-        </div>
-      </div>
+
+          <div className="rounded-2xl p-4 mt-5 overflow-x-auto" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-bold text-[var(--text-primary)]">Forecast data</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{showAll ? rows.length : Math.min(12, rows.length)} of {rows.length} hourly records</p>
+              </div>
+              <button onClick={() => setShowAll(value => !value)} className="text-[10px] text-emerald-300">
+                {showAll ? "Show first 12 hours" : `Show all ${rows.length} hours`}
+              </button>
+            </div>
+
+            <table className="w-full min-w-[1000px] text-[10px]">
+              <thead>
+                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--border)]">
+                  {['Forecast hour', 'AQI', 'PM2.5', 'PM10', 'O3', 'NO2', 'Temp', 'Wind', 'BLH', 'Inversion'].map(label => <th key={label} className="px-2 py-2 font-semibold">{label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {(showAll ? rows : rows.slice(0, 12)).map((row, index) => (
+                  <tr key={`${row.station_id}-${row.forecast_hour}-${index}`} className="border-b border-[var(--border)] text-[var(--text-secondary)]">
+                    <td className="px-2 py-2">H+{Number.isFinite(Number(row.forecast_hour)) ? Number(row.forecast_hour) : index}</td>
+                    <td className="px-2 py-2">{formatValue(row.aqi)}</td>
+                    <td className="px-2 py-2">{formatValue(row.pm25)}</td>
+                    <td className="px-2 py-2">{formatValue(row.pm10)}</td>
+                    <td className="px-2 py-2">{formatValue(row.o3)}</td>
+                    <td className="px-2 py-2">{formatValue(row.no2)}</td>
+                    <td className="px-2 py-2">{formatValue(row.temperature_c)}°C</td>
+                    <td className="px-2 py-2">{formatValue(row.wind_speed_ms)} m/s</td>
+                    <td className="px-2 py-2">{formatValue(row.boundary_layer_height_m)} m</td>
+                    <td className="px-2 py-2">{row.inversion_flag ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

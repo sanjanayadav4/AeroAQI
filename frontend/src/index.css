@@ -425,11 +425,3 @@ body {
 
 /* Aero soft bloom */
 .aero-soft-bloom { filter: drop-shadow(0 0 12px rgba(16,185,129,.15)); }
-
-/* WEATHER & ATMOSPHERE PROTECTION */
-/* Revert the globally overridden variables back to dark mode specifically for the locked sections */
-#weather-section, #weather-section * {
-  --text-primary: #ffffff !important;
-  --text-secondary: #cbd5e1 !important;
-  --text-muted: #94a3b8 !important;
-}

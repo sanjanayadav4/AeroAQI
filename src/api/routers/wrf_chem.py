@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 
-from src.api.schemas import WRFchemForecastResponse
 from src.demo.demo_stations import DEMO_STATIONS
 from src.wrf_chem.simulator import generate_wrf_chem_forecast
 
@@ -13,7 +12,6 @@ router = APIRouter(
 
 @router.get(
     "/{station_id}",
-    response_model=WRFchemForecastResponse,
 )
 def get_wrf_chem_forecast(station_id: str):
     station = next(

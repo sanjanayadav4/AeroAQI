@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse
 from src.api.routers import fire, health, observations, pipeline, stations, weather
 from src.api.routers import forecast as forecast_router
 from src.api.routers import auth as auth_router
+from src.api.routers import gemini, wrf_chem
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -115,7 +116,7 @@ def create_app() -> FastAPI:
     # ── CORS ──────────────────────────────────────────────────────────────
     raw_origins = os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173",
+        "http://localhost:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175",
     )
     origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
@@ -147,6 +148,8 @@ def create_app() -> FastAPI:
     app.include_router(pipeline.router)
     app.include_router(forecast_router.router)
     app.include_router(auth_router.router)
+    app.include_router(wrf_chem.router)
+    app.include_router(gemini.router)
 
     # ── Root redirect to docs ─────────────────────────────────────────────
     @app.get("/", include_in_schema=False)

@@ -13,7 +13,7 @@ class GeminiService:
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-3.8-flash"
 
-    def explain_aqi(self, data: dict) -> str:
+    def explain_aqi(self, data: dict, question: str | None = None) -> str:
         prompt = f"""
 You are an air-quality assistant for the AeroAQI project.
 
@@ -54,6 +54,8 @@ Explain:
 1. What is driving the AQI.
 2. How weather and mixing conditions are affecting pollution.
 3. One practical takeaway.
+
+User question: {question or "Explain the current AQI and the main factors affecting it."}
 
 Do not invent measurements that are not provided.
 """

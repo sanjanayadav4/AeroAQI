@@ -26,7 +26,8 @@ from typing import Annotated, Optional
 from fastapi import Depends
 
 from src.storage.db_client import DBClient
-from src.utils.config_loader import load_settings, load_stations
+from src.utils.config_loader import load_settings
+from src.demo.demo_stations import DEMO_STATIONS
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -77,10 +78,10 @@ def get_settings() -> dict:
 
 def get_station_list() -> list[dict]:
     """
-    FastAPI dependency that returns all monitoring station records
-    from config/stations.yaml. Cached by config_loader (lru_cache).
+    FastAPI dependency that returns the AeroAQI prototype
+    station dataset.
     """
-    return load_stations()
+    return DEMO_STATIONS
 
 
 # ---------------------------------------------------------------------------

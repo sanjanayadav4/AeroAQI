@@ -171,10 +171,17 @@ class WeatherObservation(_Base):
             ts = ts.isoformat()
 
         # Parse temperature_profile JSON string → dict
+        # Also handle NaN/None (pandas float NaN) which fails Optional[dict] validation
         tp = row.get("temperature_profile")
-        if isinstance(tp, str):
+        if tp is not None:
             try:
-                tp = json.loads(tp)
+                import math as _math
+                if isinstance(tp, float) and _math.isnan(tp):
+                    tp = None
+                elif isinstance(tp, str):
+                    tp = json.loads(tp)
+                elif not isinstance(tp, dict):
+                    tp = None
             except Exception:
                 tp = None
 

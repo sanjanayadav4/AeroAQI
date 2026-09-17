@@ -4,7 +4,7 @@
  * Interactive Delhi-NCR air intelligence dashboard
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   AreaChart, Area, LineChart, Line, ResponsiveContainer,
   XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
@@ -27,25 +27,25 @@ import {
 function aqiColor(v) {
   if (v <= 50)  return "#22c55e";
   if (v <= 100) return "#eab308";
-  if (v <= 150) return "#f97316";
-  if (v <= 200) return "#ef4444";
-  if (v <= 300) return "#a855f7";
-  return "#b91c1c";
+  if (v <= 200) return "#f97316";
+  if (v <= 300) return "#ef4444";
+  if (v <= 400) return "#9333ea";
+  return "#7f1d1d";
 }
 function aqiLabel(v) {
   if (v <= 50)  return "Good";
   if (v <= 100) return "Moderate";
-  if (v <= 150) return "Unhealthy (Sensitive)";
-  if (v <= 200) return "Unhealthy";
-  if (v <= 300) return "Very Unhealthy";
+  if (v <= 200) return "Unhealthy (Sensitive)";
+  if (v <= 300) return "Unhealthy";
+  if (v <= 400) return "Very Unhealthy";
   return "Hazardous";
 }
 function aqiBgClass(v) {
   if (v <= 50)  return "bg-aqi-good";
   if (v <= 100) return "bg-aqi-moderate";
-  if (v <= 150) return "bg-aqi-sensitive";
-  if (v <= 200) return "bg-aqi-unhealthy";
-  if (v <= 300) return "bg-aqi-very";
+  if (v <= 200) return "bg-aqi-sensitive";
+  if (v <= 300) return "bg-aqi-unhealthy";
+  if (v <= 400) return "bg-aqi-very";
   return "bg-aqi-hazardous";
 }
 
@@ -77,21 +77,21 @@ function NavItem({ icon, label, active, onClick }) {
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-left group
         ${active
-          ? "nav-active text-emerald-300"
-          : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+          ? "nav-active text-emerald-700"
+          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
         }`}
     >
-      <span className={`${active ? "text-emerald-400" : "text-[var(--text-muted)] group-hover:text-emerald-400"} transition-colors`}>
+      <span className={`${active ? "text-emerald-600" : "text-[var(--text-muted)] group-hover:text-emerald-600"} transition-colors`}>
         {icon}
       </span>
       <span className="truncate">{label}</span>
-      {active && <ChevronRight size={14} className="ml-auto text-emerald-400/60" />}
+      {active && <ChevronRight size={14} className="ml-auto text-emerald-500/70" />}
     </button>
   );
 }
 
 // ─── Sidebar ──────────────────────────────────────────────
-const NAV = [
+const NAV_PRIMARY = [
   { icon:<LayoutDashboard size={16}/>, label:"Dashboard" },
   { icon:<Map size={16}/>,            label:"NCR Map" },
   { icon:<BarChart3 size={16}/>,      label:"AQI Forecast" },
@@ -100,74 +100,133 @@ const NAV = [
   { icon:<Flame size={16}/>,          label:"Plume Tracker" },
   { icon:<Bell size={16}/>,           label:"Alerts & Notifications" },
   { icon:<Navigation size={16}/>,     label:"Stations" },
-  { icon:<FileText size={16}/>,       label:"Reports" },
-  { icon:<Activity size={16}/>,       label:"Data Pipeline" },
-  { icon:<Bot size={16}/>,             label:"AI Insights" },
-  { icon:<Settings size={16}/>,       label:"Profile & Settings" },
+];
+
+const NAV_SECONDARY = [
+  { icon:<FileText size={16}/>,  label:"Forecast Validation" },
+  { icon:<Activity size={16}/>,  label:"Data Pipeline" },
+  { icon:<Bot size={16}/>,       label:"AI Insights" },
+  { icon:<Heart size={16}/>,     label:"Decision Support" },
+  { icon:<Settings size={16}/>,  label:"Profile & Settings" },
+];
+
+// Combined nav for index calculations — must match ROUTES order
+const NAV = [
+  ...NAV_PRIMARY,
+  ...NAV_SECONDARY,
 ];
 
 const AQI_SCALE = [
-  { range:"0-50",   label:"Good",                    dot:"#22c55e" },
-  { range:"51-100", label:"Moderate",                dot:"#eab308" },
-  { range:"101-150",label:"Unhealthy for Sensitive", dot:"#f97316" },
-  { range:"151-200",label:"Unhealthy",               dot:"#ef4444" },
-  { range:"201-300",label:"Very Unhealthy",          dot:"#a855f7" },
-  { range:"301+",   label:"Hazardous",               dot:"#b91c1c" },
+  { range:"0–50",    label:"Good",             dot:"#22c55e" },
+  { range:"51–100",  label:"Moderate",         dot:"#eab308" },
+  { range:"101–200", label:"Sensitive Groups", dot:"#f97316" },
+  { range:"201–300", label:"Unhealthy",        dot:"#ef4444" },
+  { range:"301–400", label:"Very Unhealthy",   dot:"#9333ea" },
+  { range:"401–500", label:"Hazardous",        dot:"#7f1d1d" },
 ];
 
 function Sidebar({ active, setActive, mobile, onClose, user }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
   const initial = (user?.name || "A").trim().charAt(0).toUpperCase() || "A";
+
+  // Close more-menu when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   return (
     <aside className={`flex flex-col h-full w-[232px] bg-[var(--surface)] border-r border-[var(--border)] ${mobile ? "" : "fixed left-0 top-0"}`}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-[var(--border)]">
-  <img
-    src="/icon.png"
-    alt="AeroAQI"
-    className="w-12 h-12 object-contain"
-  />
-
-  <div>
-          <h1 className="text-base font-bold text-[var(--text-primary)] tracking-tight">AeroAQI</h1>
-          <p className="text-[10px] text-[var(--text-muted)] leading-tight">Clean Air, Better Tomorrow</p>
+      <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[var(--border)]">
+        <img src="/icon.png" alt="AeroAQI" className="w-10 h-10 object-contain flex-shrink-0"/>
+        <div className="min-w-0">
+          <h1 className="text-sm font-bold text-[var(--text-primary)] tracking-tight">AeroAQI</h1>
+          <p className="text-[10px] text-[var(--text-muted)] leading-tight truncate">Delhi-NCR Air Intelligence</p>
         </div>
         {mobile && (
-          <button onClick={onClose} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-            <X size={18}/>
+          <button onClick={onClose} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg hover:bg-[var(--surface-hover)]">
+            <X size={16}/>
           </button>
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-          Navigation
-        </p>
-        {NAV.map((n, i) => (
-          <NavItem key={n.label} icon={n.icon} label={n.label}
-            active={active === i} onClick={() => { setActive(i); if (onClose) onClose(); }} />
-        ))}
+      {/* Primary nav */}
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        <p className="px-3 pt-1 pb-2 text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Main</p>
+        {NAV_PRIMARY.map((n) => {
+          const i = NAV.findIndex(x => x.label === n.label);
+          return (
+            <NavItem key={n.label} icon={n.icon} label={n.label}
+              active={active === i} onClick={() => { setActive(i); if (onClose) onClose(); }} />
+          );
+        })}
+
+        {/* More / three-dot menu */}
+        <div ref={moreRef} className="relative mt-1">
+          <button
+            onClick={() => setMoreOpen(v => !v)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left
+              ${moreOpen
+                ? "bg-[var(--surface-hover)] text-[var(--text-primary)]"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+              }`}
+          >
+            <span className="text-[var(--text-muted)]">
+              <SlidersHorizontal size={16}/>
+            </span>
+            <span className="truncate">More</span>
+            <ChevronRight size={13} className={`ml-auto text-[var(--text-muted)] transition-transform ${moreOpen ? "rotate-90" : ""}`}/>
+          </button>
+
+          {moreOpen && (
+            <div className="more-menu">
+              {NAV_SECONDARY.map((n) => {
+                const i = NAV.findIndex(x => x.label === n.label);
+                return (
+                  <button key={n.label}
+                    onClick={() => { setActive(i); setMoreOpen(false); if (onClose) onClose(); }}
+                    className="more-menu-item"
+                    style={active === i ? {background:"var(--accent-green-light)", color:"var(--accent-green)"} : {}}
+                  >
+                    <span style={{color: active === i ? "var(--accent-green)" : "var(--text-muted)"}}>{n.icon}</span>
+                    {n.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
-      {/* AQI Legend */}
+      {/* AQI scale */}
       <div className="mx-3 mb-3 rounded-xl p-3 glass-dark">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-2.5">
-          AQI Index Scale
-        </p>
-        {AQI_SCALE.map(s => (
+        <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">AQI Scale</p>
+        {[
+          { range:"0–50",   label:"Good",          dot:"#16a34a" },
+          { range:"51–100", label:"Moderate",       dot:"#d97706" },
+          { range:"101–150",label:"Sensitive",      dot:"#ea580c" },
+          { range:"151–200",label:"Unhealthy",      dot:"#dc2626" },
+          { range:"201–300",label:"Very Unhealthy", dot:"#7e22ce" },
+          { range:"301+",   label:"Hazardous",      dot:"#7f1d1d" },
+        ].map(s => (
           <div key={s.range} className="flex items-center gap-2 py-0.5">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:s.dot,boxShadow:`0 0 5px ${s.dot}80`}}/>
-            <span className="text-[10px] text-[var(--text-muted)] w-11 flex-shrink-0">{s.range}</span>
-            <span className="text-[10px] text-[var(--text-muted)]">{s.label}</span>
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:s.dot}}/>
+            <span className="text-[9px] text-[var(--text-muted)] w-12 flex-shrink-0">{s.range}</span>
+            <span className="text-[9px] text-[var(--text-secondary)]">{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* Profile */}
-      <button onClick={() => setActive(NAV.length - 1)}
-        className="mx-3 mb-4 p-3 rounded-xl glass-subtle flex items-center gap-2.5 text-left hover:bg-[var(--surface-hover)] transition">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-[var(--text-primary)]"
-          style={{background:"linear-gradient(135deg,#16a34a,#22c55e)"}}>{initial}</div>
+      <button onClick={() => { const i = NAV.findIndex(x => x.label === "Profile & Settings"); setActive(i); }}
+        className="mx-3 mb-4 p-3 rounded-xl glass-subtle flex items-center gap-2.5 text-left hover:bg-[var(--surface-hover)] transition-colors">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+          style={{background:"linear-gradient(135deg,#047857,#059669)"}}>{initial}</div>
         <div className="min-w-0">
           <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{user?.name || "AeroAQI User"}</p>
           <p className="text-[10px] text-[var(--text-muted)] truncate">Profile & Settings</p>
@@ -190,10 +249,20 @@ function AmbientMelodyButton(){
 function Header({ onMenu, onAlerts, onProfile, onLocation, user }) {
   const [time, setTime] = useState(new Date());
   const { data: weather } = useLiveWeather();
+  const { stations } = useLiveStations();
+
   const wc = weather?.data?.observations?.at(-1) || {};
-  const headerTemp = Number.isFinite(Number(wc.temperature)) ? Math.round(Number(wc.temperature)) : null;
-  const headerWind = Number.isFinite(Number(wc.wind_speed)) ? Number(wc.wind_speed).toFixed(1) : null;
-  const headerHumidity = Number.isFinite(Number(wc.relative_humidity)) ? Math.round(Number(wc.relative_humidity)) : null;
+  // Primary source: /weather endpoint; fallback: first station with observations
+  const stFb = stations.find(s => s.hasObs) || stations[0] || null;
+  const headerTemp = Number.isFinite(Number(wc.temperature))
+    ? Math.round(Number(wc.temperature))
+    : (Number.isFinite(Number(stFb?.temperature_c)) ? Math.round(Number(stFb.temperature_c)) : null);
+  const headerWind = Number.isFinite(Number(wc.wind_speed))
+    ? Number(wc.wind_speed).toFixed(1)
+    : (Number.isFinite(Number(stFb?.wind_speed_ms)) ? Number(stFb.wind_speed_ms).toFixed(1) : null);
+  const headerHumidity = Number.isFinite(Number(wc.relative_humidity))
+    ? Math.round(Number(wc.relative_humidity))
+    : (Number.isFinite(Number(stFb?.humidity)) ? Math.round(Number(stFb.humidity)) : null);
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(id);
@@ -239,7 +308,7 @@ function Header({ onMenu, onAlerts, onProfile, onLocation, user }) {
         <div className="flex items-center gap-1.5">
           <Thermometer size={14} className="text-orange-400"/>
           <span className="font-semibold text-[var(--text-primary)]">{headerTemp == null ? "—" : `${headerTemp}°C`}</span>
-          <span className="text-[var(--text-muted)] text-xs">{headerTemp == null ? "Weather unavailable" : "Backend observation"}</span>
+          <span className="text-[var(--text-muted)] text-xs">{headerTemp == null ? "Unavailable" : "Station obs"}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Wind size={14} className="text-emerald-400"/>
@@ -518,21 +587,39 @@ function KpiStrip() {
   const { data: weather } = useLiveWeather();
   const station = stations.find(s => s.hasObs === true) || stations.find(s => s.aqi != null) || stations[0] || null;
   const current = weather?.data?.observations?.at(-1) || {};
-  const pbl = station?.pbl_height ?? null;
+
+  // Fall back to station observation fields when the /weather endpoint has no data.
+  // /weather uses Open-Meteo (may be empty). /observations/latest always has demo data
+  // with temperature_c / humidity / wind_speed_ms on each station row.
+  const tempVal = Number.isFinite(Number(current.temperature))
+    ? Number(current.temperature)
+    : Number.isFinite(Number(station?.temperature_c)) ? Number(station.temperature_c) : null;
+  const windVal = Number.isFinite(Number(current.wind_speed))
+    ? Number(current.wind_speed)
+    : Number.isFinite(Number(station?.wind_speed_ms)) ? Number(station.wind_speed_ms) : null;
+  const humidVal = Number.isFinite(Number(current.relative_humidity))
+    ? Number(current.relative_humidity)
+    : Number.isFinite(Number(station?.humidity)) ? Number(station.humidity) : null;
+  const pblRaw = Number.isFinite(Number(current.pbl_height)) && Number(current.pbl_height) > 0
+    ? Number(current.pbl_height)
+    : Number.isFinite(Number(station?.pbl_height)) && Number(station.pbl_height) > 0
+      ? Number(station.pbl_height)
+      : null;
+  const pbl = pblRaw;
 
   const kpis = [
     { icon:<Radio size={16}/>, label:"Stations Online", val:stations.length ? String(stations.length) : "—", unit:"backend", color:"text-green-400", glow:"rgba(34,197,94,.15)" },
-    { icon:<Thermometer size={16}/>, label:"Temperature", val:Number.isFinite(Number(current.temperature)) ? String(Math.round(current.temperature)) : "—", unit:"°C", color:"text-red-400", glow:"rgba(249,115,22,.15)" },
-    { icon:<Wind size={16}/>, label:"Wind Speed", val:Number.isFinite(Number(current.wind_speed)) ? Number(current.wind_speed).toFixed(1) : "—", unit:"m/s", color:"text-cyan-400", glow:"rgba(6,182,212,.15)" },
-    { icon:<Droplets size={16}/>, label:"Humidity", val:Number.isFinite(Number(current.relative_humidity)) ? String(Math.round(current.relative_humidity)) : "—", unit:"%", color:"text-yellow-400", glow:"rgba(59,130,246,.15)" },
-    { icon:<Gauge size={16}/>, label:"PBL Height", val:Number.isFinite(Number(pbl)) ? String(Math.round(pbl)) : "—", unit:"m", color:"text-purple-400", glow:"rgba(139,92,246,.15)" },
+    { icon:<Thermometer size={16}/>, label:"Temperature", val:tempVal != null ? String(Math.round(tempVal)) : "—", unit:"°C", color:"text-red-400", glow:"rgba(249,115,22,.15)" },
+    { icon:<Wind size={16}/>, label:"Wind Speed", val:windVal != null ? windVal.toFixed(1) : "—", unit:"m/s", color:"text-cyan-400", glow:"rgba(6,182,212,.15)" },
+    { icon:<Droplets size={16}/>, label:"Humidity", val:humidVal != null ? String(Math.round(humidVal)) : "—", unit:"%", color:"text-yellow-400", glow:"rgba(59,130,246,.15)" },
+    { icon:<Gauge size={16}/>, label:"PBL Height", val:pbl != null ? String(Math.round(pbl)) : "Unavail.", unit: pbl != null ? "m" : "", color:"text-purple-500", glow:"rgba(139,92,246,.12)" },
   ];
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
       {kpis.map(k => (
         <div key={k.label} className="card-hover flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{background:`rgba(6,28,18,.86)`,border:"1px solid rgba(74,222,128,.1)",backdropFilter:"blur(12px)"}}>
+          style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:k.glow}}>
             <span className={k.color}>{k.icon}</span>
           </div>
@@ -550,8 +637,14 @@ function KpiStrip() {
 
 // ─── Weather & Atmosphere Panel ───────────────────────────
 // ─── Live backend helpers ──────────────────────────────────
-const API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
-
+// For local dev: empty string → Vite proxy routes to http://127.0.0.1:8000.
+// For production: set VITE_API_BASE_URL to the deployed FastAPI URL.
+// Never put secrets in VITE_* variables — they are bundled into the client.
+const API_BASE =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_API_BASE_URL) ||
+  "";
 async function apiGet(path) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
@@ -587,7 +680,7 @@ async function apiPost(path, body) {
 }
 function aqiStatus(v){if(v<=50)return "good";if(v<=100)return "moderate";if(v<=150)return "sensitive";if(v<=200)return "unhealthy";return "very";}
 function useLiveWeather(){
-  const [state,setState]=useState({loading:true,data:null,error:""});
+  const [state,setState]=useState({loading:true,data:null,error:"",stale:false});
   useEffect(()=>{
     let alive=true;
     const load=()=>apiGet("/weather?hours=168")
@@ -596,9 +689,18 @@ function useLiveWeather(){
           ? payload
           : (payload?.observations ?? payload?.data ?? []);
         if (!alive) return;
-        setState({loading:false,data:{observations},error:""});
+        setState({loading:false,data:{observations},error:"",stale:false});
       })
-      .catch(()=>alive&&setState({loading:false,data:null,error:"Backend weather unavailable"}));
+      .catch(()=>{
+        if(!alive) return;
+        setState(prev=>{
+          if(prev.data){
+            // Keep existing data, mark stale
+            return {...prev,loading:false,stale:true,error:""};
+          }
+          return {loading:false,data:null,error:"Backend weather unavailable",stale:false};
+        });
+      });
     load();
     const id=setInterval(load,300000);
     return()=>{alive=false;clearInterval(id)};
@@ -606,7 +708,7 @@ function useLiveWeather(){
   return state;
 }
 function useLiveStations() {
-  const [state, setState] = useState({ stations: [], live: false, loading: true, error: "" });
+  const [state, setState] = useState({ stations: [], live: false, loading: true, error: "", stale: false });
 
   useEffect(() => {
     let alive = true;
@@ -694,16 +796,31 @@ function useLiveStations() {
             stations,
             live: stations.length > 0,
             loading: false,
+            stale: false,
             error: stations.length ? "" : "No valid station rows returned by backend.",
           });
         }
       } catch (err) {
         if (!alive) return;
-        setState({
-          stations: [],
-          live: false,
-          loading: false,
-          error: "Station data unavailable. Ensure the AeroAQI backend is running on port 8000.",
+        // Keep existing stations on failure; only clear on first-load with no data.
+        setState(prev => {
+          if (prev.stations.length > 0) {
+            // Refresh failed but we have previous data — show stale banner, keep data.
+            return {
+              ...prev,
+              loading: false,
+              stale: true,
+              error: "",
+            };
+          }
+          // First load failed, no previous data — show backend-unavailable message.
+          return {
+            stations: [],
+            live: false,
+            loading: false,
+            stale: false,
+            error: "Station data unavailable. Ensure the AeroAQI backend is running on port 8000.",
+          };
         });
       }
     };
@@ -716,58 +833,744 @@ function useLiveStations() {
   return state;
 }
 
+// ─── Weather helpers ─────────────────────────────────────────────────────
+// Aggregate an array of hourly observations into a single day summary.
+function _wxDaySummary(rows) {
+  const vals = key => rows.map(r => Number(r[key])).filter(v => Number.isFinite(v));
+  const avg  = key => { const v = vals(key); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const min  = key => { const v = vals(key); return v.length ? Math.min(...v) : null; };
+  const max  = key => { const v = vals(key); return v.length ? Math.max(...v) : null; };
+  const anyTrue = key => rows.some(r => r[key] === true || r[key] === 1);
+  // Dominant wind direction: find most common 45° sector
+  const dirs = vals("wind_direction");
+  let domDir = null;
+  if (dirs.length) {
+    const sectors = {};
+    dirs.forEach(d => { const s = Math.round(d/45)*45 % 360; sectors[s] = (sectors[s]||0) + 1; });
+    domDir = Number(Object.entries(sectors).sort((a,b)=>b[1]-a[1])[0][0]);
+  }
+  return {
+    tempMin:  min("temperature"),
+    tempMax:  max("temperature"),
+    tempAvg:  avg("temperature"),
+    humidity: avg("relative_humidity"),
+    windAvg:  avg("wind_speed"),
+    windDir:  domDir,
+    pressure: avg("surface_pressure"),
+    pbl:      avg("pbl_height"),
+    inversion: anyTrue("inversion_flag"),
+    precip:   rows.reduce((s,r) => s + (Number(r.precipitation)||0), 0),
+    count:    rows.length,
+  };
+}
+
+// Cardinal wind direction label from degrees
+function _windDir(deg) {
+  if (deg == null) return "—";
+  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(deg/22.5) % 16];
+}
+
 function WeatherPanel() {
-  const {loading,data,error}=useLiveWeather(); const [day,setDay]=useState(0);
-  const observations=(data?.observations||[]).filter(row=>row && row.timestamp_utc).sort((a,b)=>new Date(a.timestamp_utc)-new Date(b.timestamp_utc));
-  const current=observations[observations.length-1]||{};
-  const recent=observations.slice(-7).reverse();
-  const selected=recent[day]||current;
-  const pbl=Number(current.pbl_height);
-  const inversionStrength=Number(current.inversion_strength);
-  const inv=Number.isFinite(inversionStrength)?{strength:inversionStrength,status:current.inversion_flag?"Active":"None"}:null;
-  const metrics=[
-    ["Temperature",Number(current.temperature), v=>`${Math.round(v)}°C`,<Thermometer size={15}/>,"#86efac"],
-    ["Humidity",Number(current.relative_humidity),v=>`${Math.round(v)}%`,<Droplets size={15}/>,"#6ee7b7"],
-    ["Wind",Number(current.wind_speed),v=>`${Math.round(v)} m/s`,<Wind size={15}/>,"#34d399"],
-    ["Pressure",Number(current.surface_pressure),v=>`${Math.round(v)} hPa`,<Gauge size={15}/>,"#a7f3d0"],
-    ["PBL / Mixing",pbl,v=>Number.isFinite(v)?`${Math.round(v)} m`:"Unavailable",<Layers3 size={15}/>,"#4ade80"],
-    ["Inversion",inv?.strength,v=>inv?`${inv.status} · ${v>0?"+":""}${v}°C`:"Unavailable",<Activity size={15}/>,"#fbbf24"]
+  const {loading,data,error}=useLiveWeather();
+  const {stations}=useLiveStations();
+  const [view, setView] = useState("daily");   // "daily" | "hourly"
+  const [chart, setChart] = useState("temp");  // "temp" | "humidity" | "wind" | "pressure" | "pbl"
+  const [hourPage, setHourPage] = useState(0); // page for hourly table (24 rows/page)
+
+  // ── All 168 observations, sorted oldest→newest ─────────────
+  const observations = (data?.observations||[])
+    .filter(row => row && row.timestamp_utc)
+    .sort((a,b) => new Date(a.timestamp_utc) - new Date(b.timestamp_utc));
+
+  // Most recent observation = current conditions
+  const current = observations.length ? observations[observations.length - 1] : {};
+
+  // ── Fallback to station obs when /weather is empty ─────────
+  const stationFallback = stations.find(s => s.hasObs) || stations[0] || null;
+  const fv = (wxField, stField) => {
+    const wx = Number(current[wxField]);
+    if (Number.isFinite(wx)) return wx;
+    const st = Number(stationFallback?.[stField]);
+    return Number.isFinite(st) ? st : null;
+  };
+  const tempVal  = fv("temperature",       "temperature_c");
+  const humidVal = fv("relative_humidity", "humidity");
+  const windVal  = fv("wind_speed",        "wind_speed_ms");
+  const pressVal = Number(current.surface_pressure);
+  const pblVal   = fv("pbl_height",        "pbl_height");
+  const windDirVal = Number(current.wind_direction);
+  const invStr   = Number(current.inversion_strength);
+  const inv      = Number.isFinite(invStr)
+    ? { strength:invStr, status: current.inversion_flag ? "Active" : "None" }
+    : null;
+
+  // ── Current-conditions metric cards ────────────────────────
+  const metrics = [
+    { label:"Temperature", val:tempVal,  fmt:v=>`${Math.round(v)}°C`,       icon:<Thermometer size={15}/>, color:"#22c55e" },
+    { label:"Humidity",    val:humidVal, fmt:v=>`${Math.round(v)}%`,        icon:<Droplets size={15}/>,    color:"#34d399" },
+    { label:"Wind",        val:windVal,  fmt:v=>`${v.toFixed(1)} m/s`,      icon:<Wind size={15}/>,        color:"#059669" },
+    { label:"Wind Dir",    val:Number.isFinite(windDirVal)?windDirVal:null,
+                           fmt:v=>`${_windDir(v)} (${Math.round(v)}°)`,     icon:<Navigation size={15}/>,  color:"#0891b2" },
+    { label:"Pressure",    val:Number.isFinite(pressVal)?pressVal:null,
+                           fmt:v=>`${Math.round(v)} hPa`,                   icon:<Gauge size={15}/>,       color:"#10b981" },
+    { label:"PBL / Mixing",val:pblVal,   fmt:v=>`${Math.round(v)} m`,       icon:<Layers3 size={15}/>,     color:"#6ee7b7" },
+    { label:"Inversion",   val:inv?.strength,
+                           fmt:v=>inv?`${inv.status} · ${v>0?"+":""}${v.toFixed(1)}°C`:"—",
+                                                                            icon:<Activity size={15}/>,    color:"#fbbf24" },
+    { label:"Precipitation",val:Number(current.precipitation)>=0 ? Number(current.precipitation) : null,
+                           fmt:v=>`${v.toFixed(1)} mm`,                     icon:<CloudRain size={15}/>,   color:"#38bdf8" },
   ];
-  return <div id="weather-section" className="aero-readable card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"linear-gradient(145deg,rgba(7,35,24,.86),rgba(5,22,18,.78))",border:"1px solid rgba(74,222,128,.13)",backdropFilter:"blur(18px)"}}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-100 flex items-center gap-2"><CloudSun size={18} className="text-emerald-300"/>Weather & Atmosphere</p><p className="text-[10px] text-slate-400 mt-1">Backend weather observations and atmospheric conditions</p></div><span className="source-pill">{loading?"Updating…":error?"Unavailable":"LIVE · AeroAQI Backend"}</span></div>
-    {error&&<div className="rounded-xl p-3 text-[10px] text-amber-200" style={{background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.15)"}}>Live weather unavailable right now. No fake weather values are shown.</div>}
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">{metrics.map(([label,val,fmt,icon,color])=><div key={label} className="science-card p-3 rounded-xl"><span style={{color}}>{icon}</span><p className="text-[9px] text-slate-400 mt-2">{label}</p><p className="text-sm font-extrabold text-slate-100 mt-1">{Number.isFinite(val)?fmt(val):"Unavailable"}</p></div>)}</div>
-    <div className="rounded-2xl p-4" style={{background:"linear-gradient(135deg,rgba(34,197,94,.09),rgba(16,185,129,.035),rgba(255,255,255,.015))",border:"1px solid rgba(74,222,128,.1)"}}>
-      <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold text-[var(--text-primary)]">7-day weather & atmosphere outlook</p><p className="text-[9px] text-[var(--text-muted)]">Temperature · humidity · wind · pressure · mixing</p></div><span className="text-[9px] text-emerald-300">Delhi-NCR</span></div>
-      <div className="flex gap-2 overflow-x-auto pb-1">{recent.map((row,i)=><button key={`${row.station_id}-${row.timestamp_utc}`} onClick={()=>setDay(i)} className="min-w-[150px] p-3 rounded-xl text-left" style={{background:i===day?"rgba(34,197,94,.12)":"var(--surface-secondary)",border:`1px solid ${i===day?"rgba(74,222,128,.25)":"var(--surface-hover)"}`}}><p className="text-[9px] text-[var(--text-muted)]">{new Date(row.timestamp_utc).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</p><p className="text-sm font-black text-[var(--text-primary)] mt-2">{Number.isFinite(Number(row.temperature))?`${Math.round(row.temperature)}°C`:"Unavailable"}</p><p className="text-[9px] text-emerald-300 mt-1">RH {Number.isFinite(Number(row.relative_humidity))?`${Math.round(row.relative_humidity)}%`:"Unavailable"}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">Wind {Number.isFinite(Number(row.wind_speed))?`${Math.round(row.wind_speed)} m/s`:"Unavailable"}</p></button>)}</div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">{[["Humidity",Number.isFinite(Number(selected.relative_humidity))?`${Math.round(selected.relative_humidity)}%`:"Unavailable"],["Wind",Number.isFinite(Number(selected.wind_speed))?`${Math.round(selected.wind_speed)} m/s`:"Unavailable"],["Pressure",Number.isFinite(Number(selected.surface_pressure))?`${Math.round(selected.surface_pressure)} hPa`:"Unavailable"],["PBL",Number.isFinite(Number(selected.pbl_height))?`${Math.round(selected.pbl_height)} m`:"Unavailable"]].map(([a,b])=><div key={a} className="p-3 rounded-xl bg-white/[.025]"><p className="text-[9px] text-[var(--text-muted)]">{a}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{b}</p></div>)}</div>
+
+  // ── Group hourly obs by IST calendar day ───────────────────
+  // Returns an array of { dateKey, label, rows } for up to 8 days starting today
+  const dayGroups = (() => {
+    if (!observations.length) return [];
+    const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+    const groups = {};
+    for (const row of observations) {
+      const istMs  = new Date(row.timestamp_utc).getTime() + IST_OFFSET_MS;
+      const d      = new Date(istMs);
+      const key    = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(row);
+    }
+    const sortedKeys = Object.keys(groups).sort();
+    return sortedKeys.slice(0, 8).map((key, i) => {
+      const [yr, mo, dd] = key.split("-").map(Number);
+      const dt = new Date(Date.UTC(yr, mo-1, dd));
+      const todayIST = new Date(Date.now() + IST_OFFSET_MS);
+      const todayKey = `${todayIST.getUTCFullYear()}-${String(todayIST.getUTCMonth()+1).padStart(2,"0")}-${String(todayIST.getUTCDate()).padStart(2,"0")}`;
+      const isToday = key === todayKey;
+      const label = isToday ? "Today"
+        : i === 1 && sortedKeys[0] === todayKey ? "Tomorrow"
+        : dt.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", timeZone:"Asia/Kolkata" });
+      return { key, label, rows: groups[key], summary: _wxDaySummary(groups[key]) };
+    });
+  })();
+
+  // ── Chart data ─────────────────────────────────────────────
+  // For "daily" chart: one point per day (avg values)
+  // For "hourly" chart: every 3rd hour so X-axis doesn't crowd
+  const chartDataDaily = dayGroups.map(g => ({
+    t:    g.label,
+    temp: g.summary.tempAvg != null ? Math.round(g.summary.tempAvg*10)/10 : null,
+    tempMin: g.summary.tempMin != null ? Math.round(g.summary.tempMin*10)/10 : null,
+    tempMax: g.summary.tempMax != null ? Math.round(g.summary.tempMax*10)/10 : null,
+    humidity: g.summary.humidity != null ? Math.round(g.summary.humidity) : null,
+    wind: g.summary.windAvg != null ? Math.round(g.summary.windAvg*10)/10 : null,
+    pressure: g.summary.pressure != null ? Math.round(g.summary.pressure) : null,
+    pbl: g.summary.pbl != null ? Math.round(g.summary.pbl) : null,
+  }));
+
+  const chartDataHourly = observations
+    .filter((_, i) => i % 3 === 0)
+    .map(r => {
+      const ist = new Date(new Date(r.timestamp_utc).getTime() + 5.5*3600*1000);
+      return {
+        t: ist.toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",hour12:true,timeZone:"Asia/Kolkata"}),
+        temp:     Number.isFinite(Number(r.temperature))        ? Math.round(Number(r.temperature)*10)/10 : null,
+        humidity: Number.isFinite(Number(r.relative_humidity))  ? Math.round(Number(r.relative_humidity)) : null,
+        wind:     Number.isFinite(Number(r.wind_speed))         ? Math.round(Number(r.wind_speed)*10)/10 : null,
+        pressure: Number.isFinite(Number(r.surface_pressure))   ? Math.round(Number(r.surface_pressure)) : null,
+        pbl:      Number.isFinite(Number(r.pbl_height))         ? Math.round(Number(r.pbl_height)) : null,
+      };
+    });
+
+  const chartData    = view === "daily" ? chartDataDaily : chartDataHourly;
+  const chartConfigs = {
+    temp:     { key:"temp",     label:"Temperature (°C)",   color:"#f97316", refLines:[] },
+    humidity: { key:"humidity", label:"Humidity (%)",       color:"#38bdf8", refLines:[] },
+    wind:     { key:"wind",     label:"Wind Speed (m/s)",   color:"#059669", refLines:[] },
+    pressure: { key:"pressure", label:"Pressure (hPa)",     color:"#a855f7", refLines:[{y:1013,label:"std"}] },
+    pbl:      { key:"pbl",      label:"PBL Height (m)",     color:"#fbbf24", refLines:[{y:500,label:"500 m"}] },
+  };
+  const cc = chartConfigs[chart];
+
+  // Hourly table pagination (24 rows/page)
+  const ROWS_PER_PAGE = 24;
+  const hourRows = observations.slice(hourPage*ROWS_PER_PAGE, (hourPage+1)*ROWS_PER_PAGE);
+  const totalHourPages = Math.ceil(observations.length / ROWS_PER_PAGE);
+
+  const fmt = (v, digits=1) => v != null && Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : "—";
+
+  return (
+    <div id="weather-section" className="flex flex-col gap-5">
+
+      {/* ── Status banners ───────────────────────────────── */}
+      {error && !stationFallback && (
+        <div className="rounded-xl px-4 py-3 text-xs text-amber-700 flex items-center gap-2"
+          style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.2)"}}>
+          <Info size={13}/>Live weather endpoint unavailable. No fabricated values are shown.
+        </div>
+      )}
+      {error && stationFallback && (
+        <div className="rounded-xl px-4 py-3 text-xs text-blue-700 flex items-center gap-2"
+          style={{background:"rgba(59,130,246,.06)",border:"1px solid rgba(59,130,246,.18)"}}>
+          <Info size={12}/>Temperature, humidity and wind shown from station observations (fallback).
+        </div>
+      )}
+      {data?.observations?.[0]?.data_source?.includes("demo") && (
+        <div className="rounded-xl px-4 py-2.5 text-[11px] text-[var(--text-muted)] flex items-center gap-2"
+          style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+          <Info size={12} className="text-[var(--text-muted)] flex-shrink-0"/>
+          AeroAQI Demo / Simulated Data — deterministic prototype weather for Delhi-NCR.
+        </div>
+      )}
+
+      {/* ── Current conditions card ───────────────────────── */}
+      <div className="rounded-2xl p-5" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <CloudSun size={17} className="text-emerald-600"/>Current Atmospheric Conditions
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+              {current.timestamp_utc
+                ? new Date(current.timestamp_utc).toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kolkata"}) + " IST"
+                : "Latest available observation"}
+            </p>
+          </div>
+          <span className="source-pill">{loading?"Updating…":error?"Unavailable":"LIVE · AeroAQI Backend"}</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+          {metrics.map(m => (
+            <div key={m.label} className="science-card p-3 rounded-xl">
+              <span style={{color:m.color}}>{m.icon}</span>
+              <p className="text-[9px] text-[var(--text-muted)] mt-2 leading-tight">{m.label}</p>
+              <p className="text-sm font-bold text-[var(--text-primary)] mt-1">
+                {m.val != null && Number.isFinite(Number(m.val)) ? m.fmt(Number(m.val)) : "—"}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] text-[var(--text-muted)] mt-3">
+          PBL is a direct atmospheric model variable. Inversion is derived from pressure-level temperatures.
+        </p>
+      </div>
+
+      {/* ── 8-Day forecast section ────────────────────────── */}
+      <div className="rounded-2xl p-5" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        {/* Header + Daily/Hourly toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">
+              8-Day Weather &amp; Atmosphere Forecast
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+              {observations.length} hourly records · Delhi-NCR · AeroAQI backend
+            </p>
+          </div>
+          <div className="flex gap-1 p-1 rounded-xl" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+            {[["daily","Daily"],["hourly","Hourly"]].map(([v,l]) => (
+              <button key={v} onClick={() => { setView(v); setHourPage(0); }}
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={view===v
+                  ? {background:"var(--accent-green)",color:"#fff"}
+                  : {color:"var(--text-secondary)"}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── DAILY VIEW ─── */}
+        {view === "daily" && (
+          <>
+            {dayGroups.length === 0
+              ? <div className="rounded-xl p-6 text-center text-xs text-[var(--text-muted)]"
+                  style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+                  Loading forecast data…
+                </div>
+              : (
+                <div className="overflow-x-auto pb-2">
+                  <div className="flex gap-2 min-w-max">
+                    {dayGroups.map(g => {
+                      const s = g.summary;
+                      return (
+                        <div key={g.key}
+                          className="rounded-xl p-3 flex flex-col gap-1.5"
+                          style={{
+                            minWidth:130,
+                            background:"var(--surface-secondary)",
+                            border:"1px solid var(--border)",
+                          }}>
+                          {/* Day label */}
+                          <p className="text-[11px] font-bold text-[var(--text-primary)] truncate">{g.label}</p>
+                          <p className="text-[9px] text-[var(--text-muted)]">
+                            {new Date(g.key).toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"Asia/Kolkata"})}
+                          </p>
+
+                          {/* Temp range */}
+                          <div className="flex items-baseline gap-1 mt-1">
+                            <Thermometer size={12} className="text-orange-500 flex-shrink-0"/>
+                            <span className="text-sm font-black text-orange-500">
+                              {s.tempMax != null ? Math.round(s.tempMax) : "—"}°
+                            </span>
+                            <span className="text-xs text-[var(--text-muted)]">
+                              / {s.tempMin != null ? Math.round(s.tempMin) : "—"}°C
+                            </span>
+                          </div>
+
+                          {/* Humidity */}
+                          <div className="flex items-center gap-1">
+                            <Droplets size={11} className="text-blue-400 flex-shrink-0"/>
+                            <span className="text-[10px] text-[var(--text-secondary)]">
+                              {s.humidity != null ? `${Math.round(s.humidity)}%` : "—"}
+                            </span>
+                          </div>
+
+                          {/* Wind */}
+                          <div className="flex items-center gap-1">
+                            <Wind size={11} className="text-emerald-500 flex-shrink-0"/>
+                            <span className="text-[10px] text-[var(--text-secondary)]">
+                              {s.windAvg != null ? `${s.windAvg.toFixed(1)} m/s` : "—"}
+                              {s.windDir != null ? ` ${_windDir(s.windDir)}` : ""}
+                            </span>
+                          </div>
+
+                          {/* Pressure */}
+                          <div className="flex items-center gap-1">
+                            <Gauge size={11} className="text-purple-400 flex-shrink-0"/>
+                            <span className="text-[10px] text-[var(--text-secondary)]">
+                              {s.pressure != null ? `${Math.round(s.pressure)} hPa` : "—"}
+                            </span>
+                          </div>
+
+                          {/* PBL */}
+                          <div className="flex items-center gap-1">
+                            <Layers3 size={11} className="text-yellow-500 flex-shrink-0"/>
+                            <span className="text-[10px] text-[var(--text-secondary)]">
+                              {s.pbl != null ? `${Math.round(s.pbl)} m` : "—"}
+                            </span>
+                          </div>
+
+                          {/* Inversion badge */}
+                          {s.inversion && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full w-fit"
+                              style={{background:"rgba(234,88,12,.1)",color:"#c2410c",border:"1px solid rgba(234,88,12,.2)"}}>
+                              Inversion
+                            </span>
+                          )}
+
+                          {/* Precipitation */}
+                          {s.precip > 0 && (
+                            <div className="flex items-center gap-1">
+                              <CloudRain size={11} className="text-sky-400 flex-shrink-0"/>
+                              <span className="text-[9px] text-sky-600">{s.precip.toFixed(1)} mm</span>
+                            </div>
+                          )}
+
+                          <p className="text-[8px] text-[var(--text-muted)] mt-1">{s.count} hourly pts</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
+            }
+          </>
+        )}
+
+        {/* ── HOURLY VIEW ─── */}
+        {view === "hourly" && (
+          <div>
+            <div className="overflow-x-auto rounded-xl" style={{border:"1px solid var(--border)"}}>
+              <table className="w-full text-[11px] min-w-[700px]">
+                <thead style={{background:"var(--surface-secondary)"}}>
+                  <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border)]">
+                    {["Time (IST)","Temp °C","Humidity %","Wind m/s","Dir","Pressure hPa","PBL m","Inversion","Rain mm"].map(h => (
+                      <th key={h} className="px-3 py-2.5 font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {hourRows.map((r, i) => {
+                    const ist = new Date(new Date(r.timestamp_utc).getTime() + 5.5*3600*1000);
+                    const ts  = ist.toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"});
+                    const inv = r.inversion_flag === true || r.inversion_flag === 1;
+                    return (
+                      <tr key={r.timestamp_utc || i}
+                        className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)] transition-colors"
+                        style={{background: i%2===0 ? "var(--surface)" : "var(--surface-secondary)"}}>
+                        <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap font-medium">{ts}</td>
+                        <td className="px-3 py-2 text-[var(--text-primary)] font-semibold">{fmt(r.temperature,1)}</td>
+                        <td className="px-3 py-2 text-[var(--text-primary)]">{fmt(r.relative_humidity,0)}</td>
+                        <td className="px-3 py-2 text-[var(--text-primary)]">{fmt(r.wind_speed,1)}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{_windDir(Number(r.wind_direction))}</td>
+                        <td className="px-3 py-2 text-[var(--text-primary)]">{fmt(r.surface_pressure,0)}</td>
+                        <td className="px-3 py-2 text-[var(--text-primary)]">{fmt(r.pbl_height,0)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${inv?"text-orange-700":"text-[var(--text-muted)]"}`}
+                            style={inv?{background:"rgba(234,88,12,.1)",border:"1px solid rgba(234,88,12,.2)"}:{background:"var(--surface-active)"}}>
+                            {inv ? "Active" : "None"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{fmt(r.precipitation,1)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-3">
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Showing {hourPage*ROWS_PER_PAGE+1}–{Math.min((hourPage+1)*ROWS_PER_PAGE, observations.length)} of {observations.length} hourly rows
+              </span>
+              <div className="flex gap-1">
+                <button onClick={() => setHourPage(p => Math.max(0,p-1))}
+                  disabled={hourPage===0}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-40 transition-colors hover:bg-[var(--surface-hover)]"
+                  style={{background:"var(--surface-secondary)",border:"1px solid var(--border)",color:"var(--text-secondary)"}}>
+                  ← Prev
+                </button>
+                <button onClick={() => setHourPage(p => Math.min(totalHourPages-1,p+1))}
+                  disabled={hourPage>=totalHourPages-1}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-40 transition-colors hover:bg-[var(--surface-hover)]"
+                  style={{background:"var(--surface-secondary)",border:"1px solid var(--border)",color:"var(--text-secondary)"}}>
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Charts section ────────────────────────────────── */}
+      <div className="rounded-2xl p-5" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">Atmospheric Trends</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+              {view === "daily" ? "Daily averages" : "Hourly values (every 3rd hour)"} · Delhi-NCR
+            </p>
+          </div>
+          {/* Chart selector */}
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(chartConfigs).map(([k,v]) => (
+              <button key={k} onClick={() => setChart(k)}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors"
+                style={chart===k
+                  ? {background:v.color, color:"#fff", boxShadow:`0 2px 6px ${v.color}44`}
+                  : {background:"var(--surface-secondary)",color:"var(--text-secondary)",border:"1px solid var(--border)"}}>
+                {v.label.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData} margin={{top:8,right:8,left:-10,bottom:4}}>
+              <defs>
+                <linearGradient id="wx-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={cc.color} stopOpacity={0.28}/>
+                  <stop offset="95%" stopColor={cc.color} stopOpacity={0.02}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+              <XAxis dataKey="t" tick={{fontSize:9,fill:"var(--text-muted)"}} axisLine={false} tickLine={false}
+                interval={view==="daily" ? 0 : "preserveStartEnd"}/>
+              <YAxis tick={{fontSize:9,fill:"var(--text-muted)"}} axisLine={false} tickLine={false}
+                label={{value:cc.label.split(" ").slice(-1)[0], angle:-90, position:"insideLeft",
+                        style:{fontSize:9,fill:"var(--text-muted)"},offset:8}}/>
+              <Tooltip
+                contentStyle={{background:"var(--surface)",border:"1px solid var(--border)",
+                               borderRadius:10,fontSize:11,boxShadow:"var(--shadow-md)"}}
+                labelStyle={{color:"var(--text-secondary)",fontWeight:600}}
+                itemStyle={{color:cc.color,fontWeight:700}}
+                formatter={v => v != null ? [`${Number(v).toFixed(1)} ${cc.label.match(/\(([^)]+)\)/)?.[1]||""}`, cc.label.split(" (")[0]]:["—",cc.label]}/>
+              {cc.refLines.map(rl => (
+                <ReferenceLine key={rl.y} y={rl.y} stroke="rgba(100,116,139,.4)"
+                  strokeDasharray="4 3"
+                  label={{value:rl.label,fontSize:8,fill:"var(--text-muted)",position:"right"}}/>
+              ))}
+              <Area type="monotone" dataKey={cc.key}
+                stroke={cc.color} strokeWidth={2}
+                fill="url(#wx-grad)" dot={false} connectNulls
+                activeDot={{r:4,fill:cc.color,stroke:"var(--surface)",strokeWidth:2}}/>
+              {/* For temperature also draw min/max range if in daily view */}
+              {chart==="temp" && view==="daily" && (
+                <>
+                  <Area type="monotone" dataKey="tempMax" stroke="#ef4444" strokeWidth={1.2}
+                    fill="none" dot={false} connectNulls strokeDasharray="3 2"
+                    activeDot={{r:3,fill:"#ef4444"}}/>
+                  <Area type="monotone" dataKey="tempMin" stroke="#38bdf8" strokeWidth={1.2}
+                    fill="none" dot={false} connectNulls strokeDasharray="3 2"
+                    activeDot={{r:3,fill:"#38bdf8"}}/>
+                </>
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[220px] flex items-center justify-center text-xs text-[var(--text-muted)]">
+            {loading ? "Loading weather data…" : "No chart data available."}
+          </div>
+        )}
+
+        {chart === "temp" && view === "daily" && (
+          <div className="flex items-center gap-4 mt-2 text-[10px] text-[var(--text-muted)]">
+            <span className="flex items-center gap-1.5"><i className="w-5 h-0.5 rounded inline-block" style={{background:cc.color}}/> Avg</span>
+            <span className="flex items-center gap-1.5"><i className="w-5 h-0.5 rounded inline-block border-dashed" style={{background:"#ef4444"}}/> Max</span>
+            <span className="flex items-center gap-1.5"><i className="w-5 h-0.5 rounded inline-block border-dashed" style={{background:"#38bdf8"}}/> Min</span>
+          </div>
+        )}
+      </div>
     </div>
-    <p className="text-[9px] text-[var(--text-muted)]">PBL is a direct atmospheric model variable. Inversion is a derived indicator from real pressure-level temperatures (1000 hPa vs 925 hPa); it is not presented as a direct observation.</p>
-  </div>;
+  );
 }
 
 // ─── Plume Tracker Panel ──────────────────────────────────
 function PlumePanel() {
-  const [tab,setTab]=useState(0);
-  const [timeIdx,setTimeIdx]=useState(0);
-  const [playing,setPlaying]=useState(false);
-  const tabs=["Plume Map","Source Regions","Transport Animation"];
-  const times=["Now","+12h","+24h","+48h","+72h"];
-  useEffect(()=>{if(!playing)return;const id=setInterval(()=>setTimeIdx(v=>{if(v>=times.length-1){setPlaying(false);return 0}return v+1}),900);return()=>clearInterval(id)},[playing]);
-  return <div id="plume-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(16px)"}}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">Stubble burning · source attribution · transport toward NCR</p></div><span className="flex items-center gap-1 text-[10px] text-amber-300 px-2 py-1 rounded-full" style={{background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.18)"}}><Info size={11}/> Fire-source backend not exposed</span></div>
-    <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-hover)"}}>{tabs.map((t,i)=><button key={t} onClick={()=>setTab(i)} className={`flex-1 text-[10px] py-2 rounded-md font-semibold transition-all ${tab===i?"text-[var(--text-primary)]":"text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`} style={tab===i?{background:"linear-gradient(135deg,rgba(6,182,212,.25),rgba(59,130,246,.2))",border:"1px solid rgba(6,182,212,.2)"}:{}}>{t}</button>)}</div>
-    {tab===0&&<div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
-      <div className="relative rounded-xl overflow-hidden min-h-[360px]" style={{background:"#051a0e",border:"1px solid var(--surface-hover)"}}>
-        <div className="absolute inset-0 map-grid opacity-30"/>
-        <div className="absolute inset-0 flex items-center justify-center"><div className="text-center max-w-sm px-5"><div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center" style={{background:"rgba(34,211,238,.08)",border:"1px solid rgba(34,211,238,.18)"}}><Flame size={22} className="text-cyan-300"/></div><p className="text-sm font-bold text-[var(--text-primary)] mt-4">Awaiting fire detections</p><p className="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed">No fire/FRP endpoint is exposed by the current backend, so no fire counts, hotspots or plume values are invented in the frontend.</p></div></div>
-        <div className="absolute bottom-3 left-3 right-3 flex items-center gap-3 text-[9px] text-[var(--text-muted)]"><span><i className="inline-block w-2 h-2 rounded-full bg-slate-500 mr-1"/>Backend fire data unavailable</span></div>
+  const [tab, setTab] = useState(0);
+  const [timeIdx, setTimeIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const { stations } = useLiveStations();
+  const tabs = ["Plume Map", "Source Regions", "Transport Timeline"];
+  const times = ["Now", "+12h", "+24h", "+36h", "+48h", "+72h"];
+
+  // Deterministic prototype values derived from first available station
+  const refStation = stations.find(s => s.hasObs) || stations[0] || null;
+  const domWindDir = "WNW";  // dominant stubble-season wind direction
+  const windSpd = refStation?.wind_speed_ms != null ? Number(refStation.wind_speed_ms).toFixed(1) : "—";
+  const plumeIntensity = ["Low","Low","Moderate","Moderate","High","Very High"][timeIdx];
+  const intensityColor = ["#22c55e","#22c55e","#f97316","#f97316","#ef4444","#a855f7"][timeIdx];
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => setTimeIdx(v => {
+      if (v >= times.length - 1) { setPlaying(false); return 0; }
+      return v + 1;
+    }), 900);
+    return () => clearInterval(id);
+  }, [playing]);
+
+  // Prototype source regions
+  const sourceRegions = [
+    { name:"Punjab",   dist:"450–600 km NW", risk:"High",   color:"#ef4444" },
+    { name:"Haryana",  dist:"150–350 km W",  risk:"High",   color:"#f97316" },
+    { name:"UP West",  dist:"80–200 km E",   risk:"Moderate",color:"#eab308"},
+    { name:"Rajasthan",dist:"400–600 km SW", risk:"Low",    color:"#22c55e" },
+  ];
+
+  return (
+    <div id="plume-section" className="rounded-2xl overflow-hidden"
+      style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-[var(--border)]">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p>
+          <p className="text-[10px] text-[var(--text-muted)]">Stubble-burning source attribution · transport toward Delhi-NCR</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 px-2.5 py-1.5 rounded-full"
+          style={{background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.22)"}}>
+          <Info size={11}/>Prototype / Simulated — fire backend not connected
+        </span>
       </div>
-      <div className="space-y-3"><div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Source region</p><div className="mt-3 rounded-lg p-3" style={{background:"rgba(245,158,11,.05)",border:"1px solid rgba(245,158,11,.12)"}}><p className="text-xs font-semibold text-amber-200">No backend fire-region data</p><p className="text-[10px] text-[var(--text-muted)] mt-1">Connect FIRMS/fire API to populate this panel.</p></div></div><div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Timeline</p><div className="flex items-center gap-2 mt-2"><button onClick={()=>setPlaying(v=>!v)} className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-300" style={{background:"rgba(6,182,212,.1)",border:"1px solid rgba(6,182,212,.2)"}}>{playing?<Pause size={12}/>:<Play size={12}/>}</button><span className="text-[10px] text-[var(--text-muted)]">{times[timeIdx]} · visualization only until fire backend is wired</span></div></div></div>
-    </div>}
-    {tab===1&&<div className="rounded-xl p-6 text-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-sm font-bold text-[var(--text-primary)]">Source-region data unavailable</p><p className="text-[10px] text-[var(--text-muted)] mt-2">This frontend intentionally does not fabricate Punjab/Haryana/Rajasthan/UP fire counts.</p></div>}
-    {tab===2&&<div className="rounded-xl p-6 text-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><p className="text-sm font-bold text-[var(--text-primary)]">Transport animation ready for backend data</p><p className="text-[10px] text-[var(--text-muted)] mt-2">The timeline control works, but plume intensity and fire transport values will appear only when the backend exposes them.</p></div>}
-  </div>;
+
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 mx-5 mt-3 rounded-xl" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+        {tabs.map((t, i) => (
+          <button key={t} onClick={() => setTab(i)}
+            className="flex-1 py-2 rounded-lg text-[11px] font-semibold transition-colors"
+            style={tab === i
+              ? {background:"var(--accent-green)", color:"#ffffff"}
+              : {color:"var(--text-secondary)"}}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-5">
+        {/* ── Tab 0: Plume Map ── */}
+        {tab === 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+            {/* Map visualization */}
+            <div className="relative rounded-xl overflow-hidden" style={{minHeight:380,background:"#0d1b2a",border:"1px solid var(--border)"}}>
+              {/* Satellite-style base */}
+              <div className="absolute inset-0" style={{
+                background:"linear-gradient(160deg,#0d2a1a 0%,#112211 35%,#0a1e2e 65%,#0d1a2e 100%)",
+                opacity:.95
+              }}/>
+              {/* Grid lines */}
+              <div className="absolute inset-0" style={{
+                backgroundImage:"linear-gradient(rgba(148,163,184,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.06) 1px,transparent 1px)",
+                backgroundSize:"48px 48px"
+              }}/>
+
+              {/* Animated plume cone from NW toward Delhi */}
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid slice">
+                <defs>
+                  <radialGradient id="plume-g" cx="30%" cy="20%" r="70%">
+                    <stop offset="0%"  stopColor="#f97316" stopOpacity={0.65 * (timeIdx / 4 + 0.3)}/>
+                    <stop offset="40%" stopColor="#f97316" stopOpacity={0.3  * (timeIdx / 4 + 0.3)}/>
+                    <stop offset="100%" stopColor="#f97316" stopOpacity="0"/>
+                  </radialGradient>
+                  <radialGradient id="ncr-g" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%"  stopColor="#a855f7" stopOpacity="0.3"/>
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0"/>
+                  </radialGradient>
+                </defs>
+                {/* Source glow NW */}
+                <ellipse cx="100" cy="80" rx="130" ry="90"  fill="url(#plume-g)"/>
+                {/* Transport corridor */}
+                <path d={`M 130 100 Q 200 160 280 200 Q 340 230 ${280 + timeIdx*20} ${200 + timeIdx*15}`}
+                  stroke="#f97316" strokeWidth="12" strokeOpacity={0.18 + timeIdx*0.04}
+                  fill="none" strokeLinecap="round"/>
+                {/* Delhi-NCR concentration */}
+                <ellipse cx="300" cy="210" rx="80" ry="55" fill="url(#ncr-g)"/>
+                {/* Wind arrows */}
+                {[[80,150,130,180],[150,120,200,150],[210,90,265,125]].map(([x1,y1,x2,y2],i) => (
+                  <g key={i}>
+                    <defs><marker id={`pa-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <polygon points="0 0,6 3,0 6" fill="rgba(186,230,253,.7)"/>
+                    </marker></defs>
+                    <line x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke="rgba(186,230,253,.45)" strokeWidth="1.5" markerEnd={`url(#pa-${i})`}/>
+                  </g>
+                ))}
+                {/* City dots */}
+                {[["Delhi",300,210],["Gurugram",250,260],["Noida",350,220],["Ghaziabad",370,190]].map(([nm,cx,cy]) => (
+                  <g key={nm}>
+                    <circle cx={cx} cy={cy} r="5" fill="rgba(255,255,255,.85)" stroke="rgba(15,23,42,.5)" strokeWidth="1"/>
+                    <text x={cx+8} y={cy+4} fontSize="9" fill="#f1f5f9" fontWeight="700"
+                      style={{textShadow:"0 1px 4px rgba(0,0,0,.8)"}}>{nm}</text>
+                  </g>
+                ))}
+                {/* Source label */}
+                <text x="25" y="35" fontSize="10" fill="#fca5a5" fontWeight="800">Punjab · Haryana</text>
+                <text x="25" y="50" fontSize="8" fill="#94a3b8">Stubble-burning source region</text>
+              </svg>
+
+              {/* Time indicator */}
+              <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                style={{background:"rgba(15,23,42,.88)",border:"1px solid rgba(255,255,255,.1)"}}>
+                <span className="text-[10px] font-bold text-slate-200">Forecast: {times[timeIdx]}</span>
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{background:intensityColor+"33",color:intensityColor,border:`1px solid ${intensityColor}55`}}>
+                  {plumeIntensity}
+                </span>
+              </div>
+
+              {/* Legend */}
+              <div className="absolute bottom-3 left-3 rounded-lg px-3 py-2"
+                style={{background:"rgba(15,23,42,.88)",border:"1px solid rgba(255,255,255,.1)"}}>
+                <p className="text-[9px] font-bold text-slate-400 mb-1.5">Plume Legend</p>
+                {[["#f97316","Source region"],["#a855f7","NCR concentration"],["rgba(186,230,253,.6)","Wind flow"]].map(([c,l]) => (
+                  <span key={l} className="flex items-center gap-1.5 text-[9px] text-slate-300 mb-0.5">
+                    <i className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:c}}/>{l}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Right side panel */}
+            <div className="space-y-3">
+              {/* Timeline controls */}
+              <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+                <p className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-wide mb-2">Transport Timeline</p>
+                <div className="grid grid-cols-3 gap-1 mb-2">
+                  {times.map((t,i) => (
+                    <button key={t} onClick={() => setTimeIdx(i)}
+                      className="py-1.5 rounded-lg text-[10px] font-semibold transition-colors"
+                      style={timeIdx === i
+                        ? {background:"var(--accent-green)", color:"#fff"}
+                        : {background:"var(--surface)", color:"var(--text-secondary)", border:"1px solid var(--border)"}}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setPlaying(v => !v)}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-colors"
+                  style={{background: playing ? "rgba(220,38,38,.08)" : "var(--accent-green-muted)", color: playing ? "#b91c1c" : "var(--accent-green)", border:`1px solid ${playing?"rgba(220,38,38,.2)":"rgba(5,150,105,.2)"}`}}>
+                  {playing ? <><Pause size={13}/>Stop</>: <><Play size={13}/>Animate</>}
+                </button>
+              </div>
+              {/* Current metrics */}
+              <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+                <p className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-wide mb-2">Conditions</p>
+                {[
+                  ["Dominant Wind", `${domWindDir} · ${windSpd} m/s`],
+                  ["Plume Intensity", plumeIntensity],
+                  ["Transport Risk", timeIdx >= 4 ? "High" : timeIdx >= 2 ? "Moderate" : "Low"],
+                  ["Source Region", "Punjab/Haryana"],
+                  ["Data", "Prototype / Simulated"],
+                ].map(([l,v]) => (
+                  <div key={l} className="flex justify-between py-1.5 border-b border-[var(--border)] last:border-0">
+                    <span className="text-[10px] text-[var(--text-muted)]">{l}</span>
+                    <span className="text-[10px] font-semibold text-[var(--text-primary)]">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab 1: Source Regions ── */}
+        {tab === 1 && (
+          <div className="space-y-3">
+            <div className="rounded-xl p-3 text-xs text-amber-700 flex items-start gap-2"
+              style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.2)"}}>
+              <Info size={13} className="flex-shrink-0 mt-0.5"/>
+              <span>Source-region data is prototype/simulated. Connect a FIRMS fire API to show real satellite fire detections.</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {sourceRegions.map(r => (
+                <div key={r.name} className="rounded-xl p-4" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">{r.name}</p>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{background:r.color}}>{r.risk}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--text-muted)]">{r.dist}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <p className="text-[10px] font-bold text-[var(--text-primary)] mb-2">Wind Transport Index (Prototype)</p>
+              <div className="flex items-center gap-3">
+                <Wind size={16} className="text-cyan-600"/>
+                <div className="flex-1">
+                  <div className="h-2 rounded-full overflow-hidden" style={{background:"var(--surface-active)"}}>
+                    <div className="h-full rounded-full" style={{width:"68%",background:"linear-gradient(90deg,#22c55e,#f97316,#ef4444)"}}/>
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-[var(--text-primary)]">68%</span>
+              </div>
+              <p className="text-[9px] text-[var(--text-muted)] mt-1.5">NW alignment index — higher = greater transport risk toward NCR</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab 2: Transport Timeline ── */}
+        {tab === 2 && (
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-muted)]">Prototype 72-hour transport forecast. Connect fire/wind backend for real data.</p>
+            <div className="space-y-2">
+              {times.map((t, i) => {
+                const intensity = ["Low","Low","Moderate","Moderate","High","Very High"][i];
+                const col = ["#22c55e","#22c55e","#f97316","#f97316","#ef4444","#a855f7"][i];
+                const pct = [15,20,40,55,72,88][i];
+                return (
+                  <div key={t} className="rounded-xl p-3 flex items-center gap-3"
+                    style={{background: timeIdx===i ? "var(--accent-green-muted)" : "var(--surface-secondary)",
+                           border:`1px solid ${timeIdx===i?"rgba(5,150,105,.25)":"var(--border)"}`}}>
+                    <button onClick={() => setTimeIdx(i)}
+                      className="w-12 text-center text-[10px] font-bold flex-shrink-0"
+                      style={{color: timeIdx===i ? "var(--accent-green)" : "var(--text-secondary)"}}>{t}</button>
+                    <div className="flex-1 h-2 rounded-full overflow-hidden" style={{background:"var(--surface-active)"}}>
+                      <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:col}}/>
+                    </div>
+                    <span className="text-[10px] font-semibold w-20 text-right" style={{color:col}}>{intensity}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Alerts Panel ─────────────────────────────────────────
@@ -785,151 +1588,492 @@ function AlertsPanel(){
   const toggleMute=()=>{const n=!muted;setMuted(n);localStorage.setItem("aeroaqi_notifications",String(!n));if(!n)playAlertTone()};
   return <div id="alerts-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(18px)"}}>
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2"><BellRing size={18} className="text-amber-300"/>Alerts & Notifications <span className="notification-badge">{unread}</span></p><p className="text-[10px] text-[var(--text-muted)] mt-1">AQI · weather · source-risk monitoring with optional alert tone</p></div><div className="flex gap-2"><button onClick={()=>{setRead(Object.fromEntries(alerts.map(a=>[a.id,true])));}} className="text-[10px] px-3 py-1.5 rounded-lg text-[var(--text-secondary)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>Mark all read</button><button onClick={toggleMute} className="text-[10px] px-3 py-1.5 rounded-lg text-[var(--text-secondary)]" style={{background:muted?"rgba(239,68,68,.08)":"rgba(34,197,94,.08)",border:"1px solid var(--surface-hover)"}}>{muted?"Enable tone":"Mute tone"}</button></div></div>
-    <div className="grid grid-cols-4 gap-1 p-1 rounded-xl" style={{background:"rgba(255,255,255,.035)"}}>{[["all","All"],["high","High"],["mod","Moderate"],["info","Info"]].map(([v,l])=><button key={v} onClick={()=>setFilter(v)} className="py-2 rounded-lg text-[10px] font-semibold" style={filter===v?{background:"rgba(34,211,238,.12)",border:"1px solid rgba(34,211,238,.18)",color:"#a5f3fc"}:{color:"#64748b"}}>{l}</button>)}</div>
-    <div className="space-y-2.5">{filtered.map(a=><div key={a.id} className="p-4 rounded-xl transition-all hover:translate-x-1" style={{background:a.bg,border:`1px solid ${a.border}`,opacity:read[a.id]?.7:1}}><div className="flex items-start gap-3"><div className="p-2 rounded-xl" style={{background:"var(--surface-hover)"}}><span className={a.badgeC}>{a.icon}</span></div><div className="flex-1"><div className="flex items-center justify-between gap-2"><p className="text-xs font-bold text-[var(--text-primary)]">{a.title}</p><span className={`text-[9px] font-bold px-2 py-1 rounded-full ${a.badgeC}`} style={{background:"var(--surface-hover)"}}>{a.badge}</span></div><p className="text-[10px] text-[var(--text-muted)] mt-1.5 leading-relaxed">{a.desc}</p><div className="flex flex-wrap gap-3 mt-2"><span className="text-[9px] text-[var(--text-muted)] flex items-center gap-1"><MapPin size={9}/>{a.areas}</span><span className="text-[9px] text-[var(--text-muted)] flex items-center gap-1"><Clock size={9}/>{a.time}</span></div><div className="flex gap-2 mt-3"><button onClick={()=>setRead(v=>({...v,[a.id]:!v[a.id]}))} className="text-[9px] px-2.5 py-1.5 rounded-lg text-emerald-300" style={{background:"rgba(6,182,212,.08)",border:"1px solid rgba(6,182,212,.14)"}}>{read[a.id]?"Mark unread":"Mark read"}</button><button onClick={()=>window.alert(`${a.title}\n\n${a.desc}\n\nAreas: ${a.areas}`)} className="text-[9px] px-2.5 py-1.5 rounded-lg text-[var(--text-muted)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>Details</button></div></div></div></div>)}</div>
+    <div className="grid grid-cols-4 gap-1 p-1 rounded-xl" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>{[["all","All"],["high","High"],["mod","Moderate"],["info","Info"]].map(([v,l])=><button key={v} onClick={()=>setFilter(v)} className="py-2 rounded-lg text-[10px] font-semibold transition-colors" style={filter===v?{background:"var(--accent-green)",color:"#ffffff"}:{color:"var(--text-secondary)"}}>{l}</button>)}</div>
+    <div className="space-y-2.5">{filtered.map(a=><div key={a.id} className="p-4 rounded-xl transition-all" style={{background:a.bg,border:`1px solid ${a.border}`,opacity:read[a.id]?0.65:1}}><div className="flex items-start gap-3"><div className="p-2 rounded-xl" style={{background:"var(--surface-hover)"}}><span className={a.badgeC}>{a.icon}</span></div><div className="flex-1"><div className="flex items-center justify-between gap-2"><p className="text-xs font-bold text-[var(--text-primary)]">{a.title}</p><span className={`text-[9px] font-bold px-2 py-1 rounded-full ${a.badgeC}`} style={{background:"var(--surface-hover)"}}>{a.badge}</span></div><p className="text-[10px] text-[var(--text-muted)] mt-1.5 leading-relaxed">{a.desc}</p><div className="flex flex-wrap gap-3 mt-2"><span className="text-[9px] text-[var(--text-muted)] flex items-center gap-1"><MapPin size={9}/>{a.areas}</span><span className="text-[9px] text-[var(--text-muted)] flex items-center gap-1"><Clock size={9}/>{a.time}</span></div><div className="flex gap-2 mt-3"><button onClick={()=>setRead(v=>({...v,[a.id]:!v[a.id]}))} className="text-[9px] px-2.5 py-1.5 rounded-lg text-emerald-300" style={{background:"rgba(6,182,212,.08)",border:"1px solid rgba(6,182,212,.14)"}}>{read[a.id]?"Mark unread":"Mark read"}</button><button onClick={()=>window.alert(`${a.title}\n\n${a.desc}\n\nAreas: ${a.areas}`)} className="text-[9px] px-2.5 py-1.5 rounded-lg text-[var(--text-muted)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>Details</button></div></div></div></div>)}</div>
     <div className="rounded-xl p-3 flex items-center gap-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}><Radio size={14} className="text-green-400"/><p className="text-[9px] text-[var(--text-muted)]">Monitoring cycle: the production app should poll the backend every 4–6 hours. This UI also supports a notification tone when a new cycle is received.</p></div>
   </div>;
 }
 
 // ─── NCR Map Panel ────────────────────────────────────────
+// Standard 6-band AQI colour scale per spec
+function aqiMapColor(v) {
+  if (v == null || !Number.isFinite(v)) return "#64748b";
+  if (v <= 50)  return "#22c55e";  // green — Good
+  if (v <= 100) return "#eab308";  // yellow — Moderate
+  if (v <= 200) return "#f97316";  // orange — Sensitive Groups
+  if (v <= 300) return "#ef4444";  // red — Unhealthy
+  if (v <= 400) return "#9333ea";  // purple — Very Unhealthy
+  return "#7f1d1d";                // dark maroon — Hazardous
+}
+function aqiMapLabel(v) {
+  if (v == null || !Number.isFinite(v)) return "No data";
+  if (v <= 50)  return "Good";
+  if (v <= 100) return "Moderate";
+  if (v <= 200) return "Sensitive Groups";
+  if (v <= 300) return "Unhealthy";
+  if (v <= 400) return "Very Unhealthy";
+  return "Hazardous";
+}
+
+// Bilinear-style inverse-distance weighted heatmap using Canvas 2D
+function drawHeatmap(canvas, stations, pollutantKey, width, height, lonToX, latToY, cx, cy) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  canvas.width  = width;
+  canvas.height = height;
+  ctx.clearRect(0, 0, width, height);
+
+  const points = stations
+    .map(s => {
+      const v = s[pollutantKey];
+      const px = width  / 2 + (lonToX(s.lon) - cx);
+      const py = height / 2 + (latToY(s.lat) - cy);
+      return { px, py, v };
+    })
+    .filter(p => p.v != null && Number.isFinite(p.v)
+              && p.px > -100 && p.px < width  + 100
+              && p.py > -100 && p.py < height + 100);
+
+  if (!points.length) return;
+
+  // Render as blurred radial blobs per station for a smooth interpolated look
+  for (const pt of points) {
+    const color = aqiMapColor(pt.v);
+    const r = 120; // influence radius
+    const grad = ctx.createRadialGradient(pt.px, pt.py, 0, pt.px, pt.py, r);
+    // parse hex → rgba
+    const hex = color.replace("#","");
+    const ri = parseInt(hex.slice(0,2),16);
+    const gi = parseInt(hex.slice(2,4),16);
+    const bi = parseInt(hex.slice(4,6),16);
+    grad.addColorStop(0,   `rgba(${ri},${gi},${bi},0.55)`);
+    grad.addColorStop(0.4, `rgba(${ri},${gi},${bi},0.28)`);
+    grad.addColorStop(1,   `rgba(${ri},${gi},${bi},0)`);
+    ctx.beginPath();
+    ctx.fillStyle = grad;
+    ctx.arc(pt.px, pt.py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// City label definitions relative to NCR center
+const NCR_CITIES = [
+  { name:"Delhi",      lat:28.6139, lon:77.2090, anchor:"center" },
+  { name:"Gurugram",   lat:28.4595, lon:77.0266, anchor:"left" },
+  { name:"Noida",      lat:28.5355, lon:77.3910, anchor:"right" },
+  { name:"Ghaziabad",  lat:28.6692, lon:77.4538, anchor:"right" },
+  { name:"Faridabad",  lat:28.4089, lon:77.3178, anchor:"left" },
+  { name:"Sonipat",    lat:28.9931, lon:77.0151, anchor:"left" },
+  { name:"Rohtak",     lat:28.8955, lon:76.6066, anchor:"left" },
+  { name:"Meerut",     lat:28.9845, lon:77.7064, anchor:"right" },
+  { name:"Panipat",    lat:29.3909, lon:76.9635, anchor:"left" },
+];
+
 function NcrMapPanel() {
-  const {stations:liveStations,live,loading}=useLiveStations();
-  const [zoom,setZoom]=useState(10); const [layer,setLayer]=useState("dark"); const [selected,setSelected]=useState(null); const [showStations,setShowStations]=useState(true); const [pollutant,setPollutant]=useState("AQI"); const [showWind,setShowWind]=useState(true); const [showFires,setShowFires]=useState(true); const [showBoundary,setShowBoundary]=useState(true);
-  const center={lat:28.62,lon:77.16};
+  const {stations:liveStations,live,loading,stale:mapStale}=useLiveStations();
+  const [zoom,setZoom]=useState(10);
+  const [layer,setLayer]=useState("satellite");
+  const [selected,setSelected]=useState(null);
+  const [showStations,setShowStations]=useState(true);
+  const [pollutant,setPollutant]=useState("AQI");
+  const [showWind,setShowWind]=useState(true);
+  const [showBoundary,setShowBoundary]=useState(true);
+  const [showCities,setShowCities]=useState(true);
+  const [showHeatmap,setShowHeatmap]=useState(true);
+  const canvasRef = useRef(null);
+  // Responsive canvas width — measured via ResizeObserver on the map container.
+  // MAP_H is fixed; mapW tracks the actual container clientWidth so the canvas,
+  // SVG overlays, tile grid and all coordinate transforms always fill the viewport.
+  const MAP_H = 480;
+  const [mapW, setMapW] = useState(840);
+  const mapContainerRef = useRef(null);
+  useEffect(() => {
+    const el = mapContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        const w = Math.floor(e.contentRect.width);
+        if (w > 0) setMapW(w);
+      }
+    });
+    ro.observe(el);
+    const w = Math.floor(el.clientWidth);
+    if (w > 0) setMapW(w);
+    return () => ro.disconnect();
+  }, []);
+
+  const center={lat:28.62,lon:77.20};
   const tileSize=256;
   const worldPx=tileSize*Math.pow(2,zoom);
   const lonToX=lon=>(lon+180)/360*worldPx;
   const latToY=lat=>{const r=lat*Math.PI/180;return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*worldPx;};
   const cx=lonToX(center.lon), cy=latToY(center.lat);
-  const tiles=[]; const tileX=Math.floor(cx/tileSize),tileY=Math.floor(cy/tileSize); for(let dx=-2;dx<=2;dx++) for(let dy=-1;dy<=1;dy++){let x=tileX+dx,y=tileY+dy,n=Math.pow(2,zoom);if(x<0||x>=n||y<0||y>=n)continue;tiles.push({x,y,key:`${x}-${y}`,left:x*tileSize-cx+420,top:y*tileSize-cy+210});}
-  const markerPos=s=>({left:420+(lonToX(s.lon)-cx),top:210+(latToY(s.lat)-cy)});
 
-  // Derive marker colour directly from the numeric AQI value so every backend station
-  // render with a visible marker even when some have no observation data.
-  // Stations without AQI data fall back to a neutral slate colour.
-  const aqiColour = aqi => {
-    if (aqi == null || !Number.isFinite(aqi)) return "#64748b"; // slate — no data
-    if (aqi <= 50)  return "#22c55e"; // green
-    if (aqi <= 100) return "#eab308"; // yellow
-    if (aqi <= 200) return "#f97316"; // orange
-    if (aqi <= 300) return "#ef4444"; // red
-    return "#a855f7";                 // purple
+  const tiles=[]; const tileX=Math.floor(cx/tileSize),tileY=Math.floor(cy/tileSize);
+  for(let dx=-3;dx<=3;dx++) for(let dy=-2;dy<=2;dy++){
+    let x=tileX+dx,y=tileY+dy,n=Math.pow(2,zoom);
+    if(x<0||x>=n||y<0||y>=n)continue;
+    tiles.push({x,y,key:`${x}-${y}`,left:x*tileSize-cx+mapW/2,top:y*tileSize-cy+MAP_H/2});
+  }
+
+  const markerPos = s => ({
+    left: mapW/2 + (lonToX(s.lon)-cx),
+    top:  MAP_H/2 + (latToY(s.lat)-cy),
+  });
+  const cityPos = c => ({
+    left: mapW/2 + (lonToX(c.lon)-cx),
+    top:  MAP_H/2 + (latToY(c.lat)-cy),
+  });
+
+  const pollutantKey = {AQI:"aqi","PM2.5":"pm25",PM10:"pm10",O3:"o3",NO2:"no2"}[pollutant];
+
+  // Determine heatmap value for colouring (PM2.5→AQI scale, others scaled)
+  const stationHeatVal = s => {
+    const raw = s[pollutantKey];
+    if (raw == null) return null;
+    if (pollutant === "AQI") return raw;
+    if (pollutant === "PM2.5") return raw * 1.8;
+    if (pollutant === "PM10")  return raw * 0.8;
+    return raw * 1.4;
   };
-  const pollutantKey = {AQI:"aqi", "PM2.5":"pm25", PM10:"pm10", O3:"o3", NO2:"no2"}[pollutant];
-  const pollutantValue = station => station[pollutantKey];
-  const pollutantColour = station => pollutant === "AQI" ? aqiColour(station.aqi) : aqiColour((pollutantValue(station) ?? 0) * (pollutant === "PM2.5" ? 1.8 : pollutant === "PM10" ? 0.8 : 1.5));
 
-  return <div id="map-section" className="card-hover rounded-2xl p-5 flex flex-col gap-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(16px)"}}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">Delhi-NCR Atmospheric Monitoring</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">{liveStations.length} backend stations · latest observations</p></div><div className="flex flex-wrap gap-2"><select value={pollutant} onChange={e=>setPollutant(e.target.value)} className="text-[10px] rounded-lg px-2 py-1.5 text-[var(--text-primary)]" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}>{["AQI","PM2.5","PM10","O3","NO2"].map(value=><option key={value}>{value}</option>)}</select><span className="flex items-center gap-1 text-[10px] text-green-400 px-2 py-1 rounded-full" style={{background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)"}}><span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400"/>{loading?"Updating…":live?"Backend data":"Unavailable"}</span><button onClick={()=>setShowStations(v=>!v)} className="text-[10px] px-2.5 py-1 rounded-lg text-[var(--text-secondary)]" style={{background:"var(--surface-hover)",border:"1px solid var(--surface-hover)"}}>{showStations?"Hide stations":"Show stations"}</button></div></div>
-    <div className="relative rounded-xl overflow-hidden h-[480px]" style={{background:"#08121d",border:"1px solid var(--surface-hover)"}}>
-      <div className="absolute inset-0 overflow-hidden" style={{filter:layer==="dark"?"brightness(.62) invert(.88) hue-rotate(180deg) saturate(.78) contrast(1.18)":"none",transition:"filter .35s ease"}}>{tiles.map(t=><img key={t.key} alt="NCR map tile" src={`https://tile.openstreetmap.org/${zoom}/${t.x}/${t.y}.png`} className="absolute w-64 h-64" style={{left:t.left,top:t.top,maxWidth:"none"}} onError={e=>{e.currentTarget.style.opacity=.25}}/> )}</div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,transparent_0,rgba(2,8,23,.2)_70%)] pointer-events-none"/><div className="absolute inset-0 pointer-events-none" style={{background:"radial-gradient(circle at 24% 38%,rgba(34,197,94,.10),transparent 13%),radial-gradient(circle at 57% 47%,rgba(234,179,8,.08),transparent 14%),radial-gradient(circle at 72% 42%,rgba(239,68,68,.10),transparent 13%),radial-gradient(circle at 45% 66%,rgba(249,115,22,.08),transparent 12%)",mixBlendMode:layer==="dark"?"screen":"multiply",opacity:.9}}/><div className="absolute inset-0 pointer-events-none" style={{mixBlendMode:"screen",opacity:.28}}>{liveStations.map(station=>{const p=markerPos(station);const c=pollutantColour(station);return <span key={`heat-${station.station_id}`} className="absolute rounded-full blur-2xl" style={{left:p.left-34,top:p.top-34,width:68,height:68,background:`radial-gradient(circle,${c}aa,transparent 70%)`}}/>})}</div>
-      {showBoundary && <div className="absolute inset-[10%] rounded-[42%] border border-cyan-300/30 pointer-events-none"/>}
-      {showWind && <div className="absolute inset-0 pointer-events-none opacity-60">{[[18,28,30,34],[34,40,46,46],[52,52,64,58],[68,35,80,41],[28,68,40,74]].map(([x1,y1,x2,y2], index)=><span key={`wind-${index}`} className="absolute border-t border-dashed border-cyan-300/70" style={{left:`${x1}%`,top:`${y1}%`,width:`${x2-x1}%`,transform:`rotate(${index % 2 ? 12 : 7}deg)`}}/>)}</div>}
-      {showFires && <div className="absolute left-[6%] top-[18%] flex gap-2 pointer-events-none"><Flame size={12} className="text-orange-400"/><Flame size={10} className="text-red-400"/><span className="text-[9px] text-orange-200">Fire Hotspots · Prototype / Simulated</span></div>}
+  const markerColor = s => aqiMapColor(pollutant==="AQI" ? s.aqi : stationHeatVal(s));
 
-      {/* Station markers — one per backend station, visible regardless of obs availability */}
-      {showStations && liveStations.map(s => {
-        const p = markerPos(s);
-        const c = pollutantColour(s);
-        const isSelected = selected?.station_id === s.station_id;
-        const sz = isSelected ? 32 : 26;
-        return (
-          <button key={s.station_id} onClick={() => setSelected(s)}
-            className="absolute -translate-x-1/2 -translate-y-1/2 group"
-            style={{left:p.left, top:p.top}}>
-            <span className="block rounded-full flex items-center justify-center"
-              style={{width:sz, height:sz, background:`${c}33`, border:`1px solid ${c}88`, boxShadow:`0 0 14px ${c}66`}}>
-              <span className="text-[9px] font-black text-[var(--text-primary)] leading-none">
+  // Redraw canvas heatmap when data or pollutant changes
+  useEffect(() => {
+    if (!canvasRef.current || !showHeatmap || !liveStations.length) return;
+    // Build synthetic pollutant-value stations for heatmap
+    const pts = liveStations.map(s => ({...s, _v: stationHeatVal(s)}));
+    drawHeatmap(canvasRef.current, pts.map(s=>({...s, [pollutantKey]:s._v})),
+      pollutantKey, mapW, MAP_H, lonToX, latToY, cx, cy);
+  }, [liveStations, pollutant, showHeatmap, zoom, mapW]);
+
+  const tileFilter = layer === "satellite"
+    ? "brightness(.55) saturate(1.3) contrast(1.1)"
+    : "brightness(.62) invert(.88) hue-rotate(180deg) saturate(.78) contrast(1.18)";
+
+  return (
+    <div id="map-section" className="card-hover rounded-2xl overflow-hidden"
+      style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-[var(--border)]">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-primary)]">Delhi-NCR Atmospheric Monitoring</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{liveStations.length} backend stations · latest observations</p>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Pollutant selector */}
+          <select value={pollutant} onChange={e=>setPollutant(e.target.value)}
+            className="text-xs rounded-lg px-2.5 py-1.5 font-medium text-[var(--text-primary)] outline-none"
+            style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+            {["AQI","PM2.5","PM10","O3","NO2"].map(v=><option key={v}>{v}</option>)}
+          </select>
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 px-2.5 py-1.5 rounded-full"
+            style={{background:"rgba(5,150,105,.08)",border:"1px solid rgba(5,150,105,.2)"}}>
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-emerald-500"/>
+            {loading?"Updating…":live?"LIVE":"Unavailable"}
+          </span>
+        </div>
+      </div>
+
+      {mapStale && (
+        <div className="px-5 py-2 text-[11px] text-amber-700 flex items-center gap-2"
+          style={{background:"rgba(217,119,6,.06)",borderBottom:"1px solid rgba(217,119,6,.18)"}}>
+          <Info size={12}/>Live refresh unavailable — showing last synced data.
+        </div>
+      )}
+
+      {/* Map viewport — ref attached for ResizeObserver */}
+      <div ref={mapContainerRef} className="relative overflow-hidden" style={{height:MAP_H, background:"#0d1b2a"}}>
+
+        {/* OSM tiles */}
+        <div className="absolute inset-0 overflow-hidden" style={{filter:tileFilter,transition:"filter .3s ease"}}>
+          {tiles.map(t=>(
+            <img key={t.key} alt="" src={`https://tile.openstreetmap.org/${zoom}/${t.x}/${t.y}.png`}
+              className="absolute w-64 h-64" style={{left:t.left,top:t.top,maxWidth:"none"}}
+              onError={e=>{e.currentTarget.style.opacity=".2"}}/>
+          ))}
+        </div>
+
+        {/* Canvas heatmap */}
+        {showHeatmap && (
+          <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none"
+            style={{width:"100%",height:"100%",mixBlendMode:"screen",opacity:.85}}
+            width={mapW} height={MAP_H}/>
+        )}
+
+        {/* Dark vignette */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{background:"radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,.35) 100%)"}}/>
+
+        {/* NCR boundary ring */}
+        {showBoundary && (
+          <div className="absolute pointer-events-none rounded-[40%]"
+            style={{
+              left:"12%",right:"10%",top:"8%",bottom:"8%",
+              border:"1.5px dashed rgba(255,255,255,.28)",
+            }}/>
+        )}
+
+        {/* Wind flow arrows (decorative SVG) */}
+        {showWind && (
+          <svg className="absolute inset-0 pointer-events-none" width={mapW} height={MAP_H} style={{opacity:.55}}>
+            {[
+              [160,80,220,110],[240,100,310,95],[350,90,420,105],
+              [90,190,150,200],[220,180,290,170],[380,170,450,165],
+              [130,300,200,310],[290,290,360,280],[430,290,500,305],
+              [160,390,230,380],[320,380,390,390],[490,370,560,360],
+            ].map(([x1,y1,x2,y2],i) => (
+              <g key={i}>
+                <defs>
+                  <marker id={`arr-${i}`} markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+                    <polygon points="0 0, 5 2.5, 0 5" fill="rgba(186,230,253,.7)"/>
+                  </marker>
+                </defs>
+                <line x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="rgba(186,230,253,.5)" strokeWidth="1.2"
+                  markerEnd={`url(#arr-${i})`}/>
+              </g>
+            ))}
+          </svg>
+        )}
+
+        {/* City labels */}
+        {showCities && NCR_CITIES.map(city => {
+          const p = cityPos(city);
+          const inView = p.left > 0 && p.left < mapW && p.top > 0 && p.top < MAP_H;
+          if (!inView) return null;
+          return (
+            <div key={city.name} className="absolute pointer-events-none select-none"
+              style={{
+                left: p.left, top: p.top,
+                transform: city.anchor === "right" ? "translate(-100%,-50%)" : city.anchor === "center" ? "translate(-50%,-50%)" : "translate(8px,-50%)",
+              }}>
+              <span className="text-[11px] font-black tracking-wide drop-shadow-lg"
+                style={{
+                  color:"#ffffff",
+                  textShadow:"0 1px 6px rgba(0,0,0,.9), 0 0 14px rgba(0,0,0,.7)",
+                }}>
+                {city.name}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Station markers — dark circle + colored ring + AQI number */}
+        {showStations && liveStations.map(s => {
+          const p = markerPos(s);
+          const c = markerColor(s);
+          const isSelected = selected?.station_id === s.station_id;
+          const sz = isSelected ? 36 : 26;
+          const inView = p.left > -20 && p.left < mapW+20 && p.top > -20 && p.top < MAP_H+20;
+          if (!inView) return null;
+          return (
+            <button key={s.station_id}
+              onClick={() => setSelected(s)}
+              className="absolute -translate-x-1/2 -translate-y-1/2 group z-10"
+              style={{left:p.left, top:p.top}}>
+              {/* Outer glow ring */}
+              <span className="absolute inset-0 rounded-full pointer-events-none"
+                style={{
+                  boxShadow:`0 0 ${isSelected?20:10}px ${c}88`,
+                  borderRadius:"50%",
+                }}/>
+              {/* Dark navy circle with colored border */}
+              <span className="flex items-center justify-center rounded-full font-black leading-none"
+                style={{
+                  width:sz, height:sz,
+                  background:"rgba(10,18,36,.88)",
+                  border:`2px solid ${c}`,
+                  boxShadow:`inset 0 0 0 1px rgba(255,255,255,.08)`,
+                  fontSize: isSelected ? 10 : 8,
+                  color: c,
+                }}>
                 {s.aqi != null ? Math.round(s.aqi) : "—"}
               </span>
-            </span>
-            <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block whitespace-nowrap text-[9px] font-semibold text-[var(--text-primary)] drop-shadow-lg">{s.name}</span>
-          </button>
-        );
-      })}
+              {/* Hover tooltip */}
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex whitespace-nowrap items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold pointer-events-none"
+                style={{background:"rgba(10,18,36,.95)",color:"#f1f5f9",border:`1px solid ${c}55`,boxShadow:"0 4px 12px rgba(0,0,0,.4)"}}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:c}}/>
+                {s.name}
+              </span>
+            </button>
+          );
+        })}
 
-      {/* Selected-station popup */}
-      {selected && (() => {
-        const c = aqiColour(selected.aqi);
-        return (
-          <div className="absolute left-3 top-3 rounded-xl p-3 w-52"
-            style={{background:"rgba(2,12,7,.96)", border:`1px solid ${c}55`, backdropFilter:"blur(12px)"}}>
-            <div className="flex items-center justify-between">
-              <p className="text-[9px] text-[var(--text-muted)]">Selected station</p>
-              <button onClick={() => setSelected(null)} className="text-[var(--text-muted)]"><X size={12}/></button>
-            </div>
-            <p className="text-sm font-bold text-[var(--text-primary)] mt-1">{selected.name}</p>
-            <p className="text-2xl font-black mt-0.5" style={{color: c}}>
-              {selected.aqi != null ? Math.round(selected.aqi) : "—"}
-            </p>
-            <p className="text-[10px] text-[var(--text-muted)]">
-              AQI · {selected.aqi != null ? aqiLabel(selected.aqi) : "No data"}
-            </p>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <div>
-                <p className="text-[9px] text-[var(--text-muted)]">PM2.5</p>
-                <p className="text-[10px] text-[var(--text-primary)] font-semibold">
-                  {selected.pm25 != null ? `${Math.round(selected.pm25)} µg/m³` : "No observation"}
-                </p>
+        {/* Selected station popup */}
+        {selected && (() => {
+          const c = aqiMapColor(selected.aqi);
+          return (
+            <div className="absolute left-3 top-3 rounded-xl w-56 z-20"
+              style={{background:"rgba(10,18,36,.96)",border:`1px solid ${c}44`,backdropFilter:"blur(16px)",boxShadow:"0 8px 24px rgba(0,0,0,.5)"}}>
+              <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Station detail</p>
+                <button onClick={()=>setSelected(null)} className="text-slate-400 hover:text-white p-0.5 rounded"><X size={12}/></button>
               </div>
-              <div>
-                <p className="text-[9px] text-[var(--text-muted)]">Agency</p>
-                <p className="text-[10px] text-[var(--text-primary)] font-semibold">{selected.agency ?? "No observation"}</p>
+              <div className="px-3 pb-3">
+                <p className="text-sm font-bold text-white leading-tight">{selected.name}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 mb-2">{selected.city ?? selected.station_id}</p>
+                <div className="flex items-end gap-2 mb-3">
+                  <p className="text-3xl font-black" style={{color:c}}>{selected.aqi != null ? Math.round(selected.aqi) : "—"}</p>
+                  <div>
+                    <p className="text-[10px] text-slate-400 leading-none">AQI</p>
+                    <p className="text-[10px] font-semibold leading-none mt-0.5" style={{color:c}}>{aqiMapLabel(selected.aqi)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    ["PM2.5", selected.pm25, "µg/m³"],
+                    ["PM10",  selected.pm10,  "µg/m³"],
+                    ["O3",    selected.o3,    "µg/m³"],
+                    ["NO2",   selected.no2,   "µg/m³"],
+                    ["Temp",  selected.temperature_c, "°C"],
+                    ["Wind",  selected.wind_speed_ms, "m/s"],
+                    ["Humidity", selected.humidity, "%"],
+                    ["Agency", null, selected.agency ?? "—"],
+                  ].map(([label, num, unit]) => (
+                    <div key={label}>
+                      <p className="text-[8px] text-slate-400 uppercase">{label}</p>
+                      <p className="text-[10px] font-semibold text-slate-200">
+                        {num != null ? `${Math.round(num*10)/10} ${unit}` : (unit && !unit.includes("µ") && !unit.includes("°") && !unit.includes("m/s") && !unit.includes("%") ? unit : "—")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {selected.timestamp && (
+                  <p className="text-[8px] text-slate-500 mt-2 border-t border-white/10 pt-1.5">
+                    {new Date(selected.timestamp).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {[['Station ID', selected.station_id], ['City', selected.city], ['State', selected.state], ['PM10', selected.pm10], ['O3', selected.o3], ['NO2', selected.no2], ['Timestamp', selected.timestamp]].map(([label, value]) => <div key={label}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-[10px] text-[var(--text-primary)] font-semibold">{value == null ? "No observation" : label === "Timestamp" ? new Date(value).toLocaleString("en-IN") : ['Station ID', 'City', 'State'].includes(label) ? value : `${Math.round(value)} µg/m³`}</p></div>)}
-            </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
-      <div className="absolute top-3 right-3 flex flex-col gap-1"><button onClick={()=>setZoom(z=>Math.min(12,z+1))} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><ZoomIn size={14}/></button><button onClick={()=>setZoom(z=>Math.max(9,z-1))} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><ZoomOut size={14}/></button><button onClick={()=>setZoom(10)} className="w-8 h-8 rounded-lg text-[var(--text-primary)] flex items-center justify-center" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><Crosshair size={14}/></button></div>
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex flex-wrap gap-1 p-1 rounded-lg" style={{background:"var(--surface)",border:"1px solid rgba(255,255,255,.1)"}}><button onClick={()=>setLayer("dark")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="dark"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Dark</button><button onClick={()=>setLayer("light")} className={`px-2.5 py-1 rounded-md text-[9px] ${layer==="light"?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>Light</button><button onClick={()=>setShowWind(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showWind?"text-cyan-300 bg-cyan-500/10":"text-[var(--text-muted)]"}`}>Wind</button><button onClick={()=>setShowFires(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showFires?"text-orange-300 bg-orange-500/10":"text-[var(--text-muted)]"}`}>Fire Hotspots</button><button onClick={()=>setShowBoundary(v=>!v)} className={`px-2.5 py-1 rounded-md text-[9px] ${showBoundary?"text-emerald-300 bg-emerald-500/10":"text-[var(--text-muted)]"}`}>NCR Boundary</button></div>
-      <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-2">
-        <div className="rounded-lg px-3 py-2 text-[9px] text-[var(--text-secondary)]" style={{background:"rgba(2,12,7,.9)"}}>
-          {pollutant} intensity · NCR coverage · {liveStations.length} monitoring points{live ? " · demo" : ""}
+        {/* Zoom controls */}
+        <div className="absolute top-3 right-3 flex flex-col gap-1">
+          {[
+            {icon:<ZoomIn size={13}/>, fn:()=>setZoom(z=>Math.min(13,z+1))},
+            {icon:<ZoomOut size={13}/>, fn:()=>setZoom(z=>Math.max(9,z-1))},
+            {icon:<Crosshair size={13}/>, fn:()=>setZoom(10)},
+          ].map(({icon,fn},i)=>(
+            <button key={i} onClick={fn}
+              className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-hover)] transition-colors"
+              style={{background:"rgba(255,255,255,.92)",border:"1px solid rgba(15,23,42,.12)",color:"var(--text-secondary)",boxShadow:"0 2px 6px rgba(0,0,0,.2)"}}>
+              {icon}
+            </button>
+          ))}
         </div>
-        {[["#22c55e","Good ≤50"],["#eab308","Moderate ≤100"],["#f97316","Unhealthy ≤200"],["#ef4444","Poor ≤300"],["#a855f7","Severe >300"]].map(([c,l])=>(
-          <span key={l} className="flex items-center gap-1 px-2 py-1 rounded text-[9px] text-[var(--text-secondary)]" style={{background:"rgba(2,12,7,.9)"}}>
-            <i className="w-2 h-2 rounded-full flex-shrink-0" style={{background:c}}/>{l}
-          </span>
-        ))}
+
+        {/* Layer/toggle controls */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex flex-wrap gap-1 px-2 py-1.5 rounded-xl"
+          style={{background:"rgba(255,255,255,.92)",border:"1px solid rgba(15,23,42,.1)",boxShadow:"0 2px 8px rgba(0,0,0,.18)"}}>
+          {[
+            {label:"Satellite", fn:()=>setLayer("satellite"), active:layer==="satellite"},
+            {label:"Map",       fn:()=>setLayer("dark"),      active:layer==="dark"},
+            {label:"Heatmap",   fn:()=>setShowHeatmap(v=>!v), active:showHeatmap},
+            {label:"Wind",      fn:()=>setShowWind(v=>!v),    active:showWind},
+            {label:"Cities",    fn:()=>setShowCities(v=>!v),  active:showCities},
+            {label:"Boundary",  fn:()=>setShowBoundary(v=>!v),active:showBoundary},
+          ].map(({label,fn,active})=>(
+            <button key={label} onClick={fn}
+              className="px-2.5 py-1 rounded-md text-[10px] font-semibold transition-colors"
+              style={active
+                ? {background:"var(--accent-green)",color:"#fff"}
+                : {color:"var(--text-secondary)","hover:background":"var(--surface-hover)"}}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Scale label */}
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-lg"
+          style={{background:"rgba(10,18,36,.88)",border:"1px solid rgba(255,255,255,.1)"}}>
+          <div style={{width:40,height:3,background:"rgba(255,255,255,.5)",borderRadius:99}}/>
+          <span className="text-[9px] font-semibold text-slate-300">~20 km</span>
+        </div>
+
+        {/* Legend */}
+        <div className="absolute bottom-3 right-3 rounded-xl px-3 py-2 max-w-[280px]"
+          style={{background:"rgba(10,18,36,.90)",border:"1px solid rgba(255,255,255,.1)"}}>
+          <p className="text-[9px] font-bold text-slate-400 mb-1.5">{pollutant} · AQI Scale</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {[
+              ["#22c55e","≤50 Good"],
+              ["#eab308","51–100"],
+              ["#f97316","101–150"],
+              ["#ef4444","151–200"],
+              ["#a855f7","201–300"],
+              ["#6d28d9","301–400"],
+              ["#7f1d1d",">400"],
+            ].map(([col,lbl])=>(
+              <span key={lbl} className="flex items-center gap-1 text-[9px] text-slate-300">
+                <i className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background:col}}/>
+                {lbl}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Station grid below map */}
+      <div className="px-4 pt-3 pb-4">
+        <p className="text-[10px] font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">All {liveStations.length} monitoring stations</p>
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-1.5">
+          {liveStations.map(s => {
+            const c = markerColor(s);
+            return (
+              <button key={s.station_id} onClick={()=>setSelected(s)}
+                className="rounded-lg p-2 text-left transition-colors hover:bg-[var(--surface-hover)]"
+                style={{
+                  background: selected?.station_id===s.station_id ? "var(--accent-green-muted)" : "var(--surface-secondary)",
+                  border:`1px solid ${selected?.station_id===s.station_id?"rgba(5,150,105,.3)":"var(--border)"}`,
+                }}>
+                <p className="text-[9px] text-[var(--text-muted)] truncate leading-tight">{s.name}</p>
+                <p className="text-sm font-black mt-0.5 leading-none" style={{color:c}}>
+                  {s.aqi != null ? Math.round(s.aqi) : "—"}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
-
-    {/* Bottom strip: show all stations, not just first 5 */}
-    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-      {liveStations.map(s => (
-        <button key={s.station_id} onClick={() => setSelected(s)}
-          className="rounded-xl p-2.5 text-left hover:bg-white/[.04] transition-colors"
-          style={{background: selected?.station_id===s.station_id ? "rgba(34,197,94,.08)" : "var(--surface-secondary)", border:`1px solid ${selected?.station_id===s.station_id?"rgba(74,222,128,.2)":"var(--surface-hover)"}`}}>
-          <p className="text-[10px] text-[var(--text-muted)] truncate">{s.name}</p>
-          <p className="text-sm font-black" style={{color: aqiColour(s.aqi)}}>
-            {s.aqi != null ? Math.round(s.aqi) : "—"}
-          </p>
-          <p className="text-[9px] text-[var(--text-muted)]">{s.pm25 != null ? `PM2.5 ${Math.round(s.pm25)}` : "no obs"}</p>
-        </button>
-      ))}
-    </div>
-  </div>;
+  );
 }
 
 // ─── Quick Actions ────────────────────────────────────────
 function QuickActions({ onAction }) {
   const actions = [
-    { icon:<BarChart3 size={18}/>, label:"AQI Forecast", sub:"72-Hour Prediction", path:"/forecast", color:"#8b5cf6", glow:"rgba(139,92,246,.2)" },
-    { icon:<Map size={18}/>, label:"NCR Map", sub:"Spatial AQI Analysis", path:"/map", color:"#06b6d4", glow:"rgba(6,182,212,.2)" },
-    { icon:<CloudSun size={18}/>, label:"Weather", sub:"Live Conditions", path:"/weather", color:"#f59e0b", glow:"rgba(245,158,11,.2)" },
-    { icon:<Flame size={18}/>, label:"Plume Tracker", sub:"Transport Analysis", path:"/plume", color:"#f97316", glow:"rgba(249,115,22,.2)" },
-    { icon:<Navigation size={18}/>, label:"Stations", sub:"NCR Monitoring", path:"/stations", color:"#22c55e", glow:"rgba(34,197,94,.2)" },
-    { icon:<Bell size={18}/>, label:"Alerts", sub:"Risk Notifications", path:"/alerts", color:"#ef4444", glow:"rgba(239,68,68,.2)" },
-    { icon:<Bot size={18}/>, label:"AI Insights", sub:"Explain the forecast", path:"/ai", color:"#06b6d4", glow:"rgba(6,182,212,.2)" },
-    { icon:<FileText size={18}/>, label:"Reports", sub:"Analytics & Export", path:"/reports", color:"#3b82f6", glow:"rgba(59,130,246,.2)" },
-    { icon:<Settings size={18}/>, label:"Settings", sub:"Profile & Preferences", path:"/settings", color:"#a855f7", glow:"rgba(168,85,247,.2)" },
+    { icon:<BarChart3 size={18}/>, label:"AQI Forecast",   sub:"72-Hour Prediction",   path:"/forecast",    color:"#7c3aed", glow:"rgba(124,58,237,.12)" },
+    { icon:<Map size={18}/>,       label:"NCR Map",         sub:"Spatial AQI Analysis", path:"/map",         color:"#0891b2", glow:"rgba(8,145,178,.12)" },
+    { icon:<Navigation size={18}/>,label:"Stations",        sub:"79 NCR Stations",      path:"/stations",    color:"#059669", glow:"rgba(5,150,105,.12)" },
+    { icon:<Layers3 size={18}/>,   label:"WRF-Chem",        sub:"Coupled Forecast",     path:"/wrf-chem",    color:"#1d4ed8", glow:"rgba(29,78,216,.12)" },
+    { icon:<CloudSun size={18}/>,  label:"Weather",         sub:"Live Conditions",      path:"/weather",     color:"#d97706", glow:"rgba(217,119,6,.12)" },
+    { icon:<Heart size={18}/>,     label:"Decision Support",    sub:"Health & action guidance", path:"/suggestions", color:"#be185d", glow:"rgba(190,24,93,.12)" },
+    { icon:<Bell size={18}/>,      label:"Alerts",          sub:"Risk Notifications",   path:"/alerts",      color:"#dc2626", glow:"rgba(220,38,38,.12)" },
+    { icon:<Bot size={18}/>,       label:"AI Insights",     sub:"Explain the forecast", path:"/ai",          color:"#0891b2", glow:"rgba(8,145,178,.12)" },
+    { icon:<FileText size={18}/>,  label:"Forecast Validation", sub:"Analytics & Export",   path:"/reports",     color:"#2563eb", glow:"rgba(37,99,235,.12)" },
+    { icon:<Settings size={18}/>,  label:"Settings",        sub:"Profile",              path:"/settings",    color:"#7c3aed", glow:"rgba(124,58,237,.12)" },
   ];
-  return <div id="quick-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-3">{actions.map(a=><button key={a.path} onClick={()=>onAction(a.path)} className="card-hover p-4 rounded-xl flex flex-col items-center text-center gap-2.5" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(12px)"}}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:a.glow,boxShadow:`0 0 16px ${a.glow}`}}><span style={{color:a.color}}>{a.icon}</span></div><div><p className="text-xs font-semibold text-[var(--text-primary)]">{a.label}</p><p className="text-[10px] text-[var(--text-muted)] mt-0.5">{a.sub}</p></div></button>)}</div>;
+  return (
+    <div id="quick-actions" className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {actions.map(a=>(
+        <button key={a.path} onClick={()=>onAction(a.path)}
+          className="card-hover p-4 rounded-xl flex flex-col items-center text-center gap-2.5"
+          style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:a.glow}}>
+            <span style={{color:a.color}}>{a.icon}</span>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[var(--text-primary)]">{a.label}</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{a.sub}</p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ─── Footer ───────────────────────────────────────────────
@@ -1000,7 +2144,7 @@ function ReportsSection() {
   };
   const generate=()=>{setGenerated(false);window.setTimeout(()=>setGenerated(true),700)};
   const fmt=v=>v==null?"No observation":Number(v).toFixed(1);
-  return <FeatureSection id="reports-section" icon={<FileText size={17} className="text-cyan-400"/>} title="Reports & Analytics" subtitle="Turn backend station and forecast intelligence into a judge-ready report">
+  return <FeatureSection id="reports-section" icon={<FileText size={17} className="text-cyan-400"/>} title="Forecast Validation" subtitle="Validate backend station data, forecast skill and export analysis reports">
     <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
       <div className="space-y-3">
         <div className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
@@ -1112,69 +2256,50 @@ function MotionBackdrop(){
 }
 
 function AeroMotionStyles(){return <style>{`
-/* AeroAQI readability overrides */
-.aero-readable{color:#cbd5e1}.aero-readable .metric-value{color:#f1f5f9!important}.aero-readable .metric-label{color:#94a3b8!important}.aero-readable .section-title{color:#e2e8f0!important}.aero-readable table th{color:#94a3b8!important}.aero-readable table td{color:#cbd5e1!important}.aero-readable button{color:inherit}.aero-readable select{color:var(--text-primary)}.aero-readable button:hover{color:var(--text-primary)}
-@keyframes aeroShimmer{0%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+/* ── Motion backdrop ───────────────────────────── */
 @keyframes aeroOrbit{from{transform:rotate(0deg) translateX(12px) rotate(0deg)}to{transform:rotate(360deg) translateX(12px) rotate(-360deg)}}
-.science-card{background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.018));border:1px solid rgba(255,255,255,.055);transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;position:relative;overflow:hidden}.science-card:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent,var(--surface-hover),transparent);transform:translateX(-120%);animation:aeroShimmer 5s ease-in-out infinite}.science-card:hover{transform:translateY(-3px);border-color:rgba(34,211,238,.2);box-shadow:0 16px 40px rgba(0,0,0,.2),0 0 24px rgba(34,211,238,.05)}
-.source-pill{font-size:9px;color:#a5f3fc;padding:6px 9px;border-radius:999px;background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.14)}
-.notification-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:9px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
-.science-ring{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(34,211,238,.15),rgba(34,211,238,.03) 62%,transparent 63%);border:1px solid rgba(34,211,238,.2);box-shadow:0 0 35px rgba(34,211,238,.1);animation:aeroPulse 2.8s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.science-card:before{animation:none}.science-card{transition:none}.science-ring{animation:none}}
 @keyframes aeroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 @keyframes aeroMarquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 @keyframes aeroFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes aeroPulse{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,.12)}50%{box-shadow:0 0 0 9px rgba(34,211,238,0)}}
-@keyframes aeroStar{0%,100%{opacity:.12;transform:translate3d(0,0,0) scale(.8)}50%{opacity:.55;transform:translate3d(0,-8px,0) scale(1)}}
+@keyframes aeroPulse{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.1)}50%{box-shadow:0 0 0 9px rgba(5,150,105,0)}}
+@keyframes aeroStar{0%,100%{opacity:.1;transform:translate3d(0,0,0) scale(.8)}50%{opacity:.4;transform:translate3d(0,-8px,0) scale(1)}}
 .motion-backdrop{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;--mx:0px;--my:0px;--mx2:0px;--my2:0px;--glow-x:50%;--glow-y:38%;}
-.motion-backdrop:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--glow-x) var(--glow-y),rgba(34,211,238,.055),transparent 28%),radial-gradient(circle at 80% 80%,rgba(139,92,246,.045),transparent 28%);}
-.motion-grid{position:absolute;inset:-5%;opacity:.18;transform:translate3d(var(--mx2),var(--my2),0);background-image:linear-gradient(rgba(148,163,184,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.045) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(circle at center,#000 20%,transparent 78%);}
-.motion-orb{position:absolute;border-radius:999px;filter:blur(1px);will-change:transform;transition:transform .12s linear;mix-blend-mode:screen;}
-.motion-orb-a{width:360px;height:360px;left:-90px;top:10%;background:radial-gradient(circle,rgba(6,182,212,.13),transparent 68%);transform:translate3d(var(--mx),var(--my),0);}
-.motion-orb-b{width:300px;height:300px;right:-60px;top:34%;background:radial-gradient(circle,rgba(139,92,246,.12),transparent 68%);transform:translate3d(var(--mx2),var(--my2),0);}
-.motion-orb-c{width:260px;height:260px;left:38%;bottom:-100px;background:radial-gradient(circle,rgba(59,130,246,.09),transparent 68%);transform:translate3d(calc(var(--mx) * -.55),calc(var(--my) * -.55),0);}
-.motion-cursor-glow{position:absolute;width:340px;height:340px;left:calc(var(--glow-x) - 170px);top:calc(var(--glow-y) - 170px);border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.045),transparent 67%);filter:blur(8px);}
+.motion-backdrop:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--glow-x) var(--glow-y),rgba(5,150,105,.04),transparent 28%),radial-gradient(circle at 80% 80%,rgba(139,92,246,.03),transparent 28%);}
+.motion-grid{position:absolute;inset:-5%;opacity:.12;transform:translate3d(var(--mx2),var(--my2),0);background-image:linear-gradient(rgba(148,163,184,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.06) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(circle at center,#000 20%,transparent 78%);}
+.motion-orb{position:absolute;border-radius:999px;filter:blur(1px);will-change:transform;transition:transform .12s linear;mix-blend-mode:multiply;}
+.motion-orb-a{width:360px;height:360px;left:-90px;top:10%;background:radial-gradient(circle,rgba(5,150,105,.06),transparent 68%);transform:translate3d(var(--mx),var(--my),0);}
+.motion-orb-b{width:300px;height:300px;right:-60px;top:34%;background:radial-gradient(circle,rgba(139,92,246,.05),transparent 68%);transform:translate3d(var(--mx2),var(--my2),0);}
+.motion-orb-c{width:260px;height:260px;left:38%;bottom:-100px;background:radial-gradient(circle,rgba(59,130,246,.04),transparent 68%);transform:translate3d(calc(var(--mx) * -.55),calc(var(--my) * -.55),0);}
+.motion-cursor-glow{position:absolute;width:340px;height:340px;left:calc(var(--glow-x) - 170px);top:calc(var(--glow-y) - 170px);border-radius:50%;background:radial-gradient(circle,rgba(5,150,105,.03),transparent 67%);filter:blur(8px);}
 .motion-stars{position:absolute;inset:0;transform:translate3d(var(--mx2),var(--my2),0);}
-.motion-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:rgba(226,232,240,.75);left:calc((var(--i) * 17 + 9) * 1%);top:calc((var(--i) * 29 + 7) * 1%);animation:aeroStar calc(3s + (var(--i) * .18s)) ease-in-out infinite;animation-delay:calc(var(--i) * -.2s);}
+.motion-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:rgba(148,163,184,.5);left:calc((var(--i) * 17 + 9) * 1%);top:calc((var(--i) * 29 + 7) * 1%);animation:aeroStar calc(3s + (var(--i) * .18s)) ease-in-out infinite;animation-delay:calc(var(--i) * -.2s);}
 .animate-float{animation:aeroFloat 4s ease-in-out infinite}.animate-marquee{animation:aeroMarquee 26s linear infinite}.animate-fade-in{animation:aeroFade .55s ease both}.live-dot{animation:aeroPulse 1.8s ease-out infinite}
 @media (pointer:coarse){.motion-backdrop .motion-grid{transform:none}.motion-orb,.motion-stars{transform:none!important}.motion-cursor-glow{display:none}}
 @media (prefers-reduced-motion:reduce){.motion-backdrop,.motion-backdrop *,.animate-float,.animate-marquee,.animate-fade-in,.live-dot{animation:none!important;transition:none!important}.motion-backdrop{display:none}}
+/* ── Auth motion (dark bg — auth screen only) ──── */
 .auth-motion{position:absolute;inset:0;overflow:hidden;pointer-events:none;--ax:0px;--ay:0px;--bx:0px;--by:0px;--gx:50vw;--gy:40vh}
-.auth-motion:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--gx) var(--gy),rgba(34,211,238,.075),transparent 19%),radial-gradient(circle at 15% 80%,rgba(59,130,246,.07),transparent 25%),radial-gradient(circle at 88% 18%,rgba(139,92,246,.08),transparent 26%)}
-.auth-grid{position:absolute;inset:-8%;opacity:.2;transform:translate3d(var(--bx),var(--by),0);background-image:linear-gradient(rgba(148,163,184,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.045) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(circle at center,#000 15%,transparent 78%);transition:transform .15s linear}
+.auth-motion:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--gx) var(--gy),rgba(34,211,238,.065),transparent 19%),radial-gradient(circle at 15% 80%,rgba(59,130,246,.06),transparent 25%),radial-gradient(circle at 88% 18%,rgba(139,92,246,.07),transparent 26%)}
+.auth-grid{position:absolute;inset:-8%;opacity:.18;transform:translate3d(var(--bx),var(--by),0);background-image:linear-gradient(rgba(148,163,184,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.045) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(circle at center,#000 15%,transparent 78%);transition:transform .15s linear}
 .auth-orb{position:absolute;border-radius:999px;filter:blur(2px);will-change:transform;transition:transform .18s linear}
 .auth-orb-a{width:420px;height:420px;left:-150px;top:12%;background:radial-gradient(circle,rgba(6,182,212,.12),transparent 67%);transform:translate3d(var(--ax),var(--ay),0)}
 .auth-orb-b{width:360px;height:360px;right:-100px;top:35%;background:radial-gradient(circle,rgba(139,92,246,.11),transparent 67%);transform:translate3d(var(--bx),var(--by),0)}
 .auth-orb-c{width:300px;height:300px;left:40%;bottom:-130px;background:radial-gradient(circle,rgba(59,130,246,.09),transparent 67%);transform:translate3d(calc(var(--ax) * -.55),calc(var(--ay) * -.55),0)}
-.auth-cursor-glow{position:absolute;width:360px;height:360px;left:calc(var(--gx) - 180px);top:calc(var(--gy) - 180px);border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.045),transparent 68%);filter:blur(10px)}
+.auth-cursor-glow{position:absolute;width:360px;height:360px;left:calc(var(--gx) - 180px);top:calc(var(--gy) - 180px);border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.04),transparent 68%);filter:blur(10px)}
 .auth-stars{position:absolute;inset:0;transform:translate3d(var(--bx),var(--by),0)}
-.auth-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:rgba(226,232,240,.55);left:calc((var(--i) * 17 + 7) * 1%);top:calc((var(--i) * 29 + 11) * 1%);animation:aeroStar calc(3s + (var(--i) * .16s)) ease-in-out infinite;animation-delay:calc(var(--i) * -.19s)}
+.auth-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:rgba(226,232,240,.45);left:calc((var(--i) * 17 + 7) * 1%);top:calc((var(--i) * 29 + 11) * 1%);animation:aeroStar calc(3s + (var(--i) * .16s)) ease-in-out infinite;animation-delay:calc(var(--i) * -.19s)}
 .auth-feature-card,.auth-mini-card{transition:transform .25s ease,border-color .25s ease,background .25s ease,box-shadow .25s ease}
-.auth-feature-card:hover{transform:translateY(-4px) rotateX(1deg);border-color:rgba(34,211,238,.2)!important;background:rgba(255,255,255,.075)!important;box-shadow:0 12px 35px rgba(0,0,0,.18)}
+.auth-feature-card:hover{transform:translateY(-4px);border-color:rgba(34,211,238,.2)!important;background:rgba(255,255,255,.08)!important;box-shadow:0 12px 35px rgba(0,0,0,.15)}
 .auth-mini-card:hover{transform:translateY(-2px);background:var(--surface-hover)}
-.auth-input{width:100%;border-radius:14px;padding:.82rem .85rem;background:rgba(2,8,23,.58);border:1px solid var(--surface-hover);color:white;outline:none;font-size:.82rem;transition:border-color .2s,box-shadow .2s,transform .2s}
-.auth-input::placeholder{color:#475569}.auth-input:focus{border-color:rgba(34,211,238,.35);box-shadow:0 0 0 3px rgba(34,211,238,.06),0 0 25px rgba(34,211,238,.05);transform:translateY(-1px)}
-.auth-otp{width:100%;letter-spacing:.65em;text-align:center;border-radius:16px;padding:1rem .8rem;background:rgba(2,8,23,.62);border:1px solid rgba(34,211,238,.2);color:white;outline:none;font-size:1.25rem;font-weight:800;transition:border-color .2s,box-shadow .2s}
-.auth-otp:focus{border-color:rgba(34,211,238,.5);box-shadow:0 0 0 4px rgba(34,211,238,.06),0 0 35px rgba(34,211,238,.08)}
-.auth-error{margin-top:.1rem;border-radius:12px;padding:.7rem .8rem;font-size:.7rem;color:#fecaca;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.16)}
-.auth-info{margin-top:.1rem;border-radius:12px;padding:.7rem .8rem;font-size:.7rem;color:#a5f3fc;background:rgba(6,182,212,.07);border:1px solid rgba(34,211,238,.15);display:flex;align-items:center;gap:.45rem}
 @media (pointer:coarse){.auth-motion .auth-grid,.auth-motion .auth-orb,.auth-motion .auth-stars{transform:none}.auth-cursor-glow{display:none}}
-@media (prefers-reduced-motion:reduce){.auth-motion{display:none}.auth-feature-card,.auth-mini-card,.auth-input{transition:none}.auth-stars i{animation:none}}
-/* Final visual cleanup: preserve the India Gate photograph instead of washing it out. */
-.aero-hero-copy h2{color:#f8fafc!important;text-shadow:0 2px 18px rgba(0,0,0,.35)}
-.aero-hero-copy p{color:#cbd5e1!important}
-.aero-hero-copy .glass{background:rgba(2,8,23,.48)!important;border-color:rgba(148,163,184,.18)!important}
-.aero-hero-copy .glass span{color:#e2e8f0!important}
+@media (prefers-reduced-motion:reduce){.auth-motion{display:none}.auth-feature-card,.auth-mini-card{transition:none}.auth-stars i{animation:none}}
+/* ── Hero image ─────────────────────────────────── */
 .aero-hero-image{filter:brightness(.96) saturate(1.10) contrast(1.05)}
 .auth-hero-image{filter:brightness(.72) saturate(1.08) contrast(1.06)}
-/* Darker, easier-to-read typography: avoid pure white text across the dashboard. */
-.text-white{color:#cbd5e1!important}
-.aero-hero-copy h2{color:#e2e8f0!important}
-.aero-hero-copy p{color:#b8c4d4!important}
-.aero-hero-copy .glass span{color:#cbd5e1!important}
-.source-pill{color:#7dd3fc!important}
-
-.aero-bright-ui{font-size:1.04em}.aero-bright-ui h1{letter-spacing:-.02em}.aero-bright-ui h2{letter-spacing:-.015em}.aero-glow-card{box-shadow:0 10px 35px rgba(16,185,129,.08),0 0 28px rgba(34,211,238,.045)}.aero-shine{position:relative;overflow:hidden}.aero-shine:before{content:"";position:absolute;top:-20%;bottom:-20%;left:-35%;width:18%;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:skewX(-18deg);animation:aeroShine 7s ease-in-out infinite}@keyframes aeroShine{0%,68%{left:-35%;opacity:0}74%{opacity:1}88%,100%{left:125%;opacity:0}}.aero-soft-bloom{filter:drop-shadow(0 0 12px rgba(16,185,129,.12))}
+/* ── Typography scale ───────────────────────────── */
+.aero-bright-ui{font-size:1.04em}.aero-bright-ui h1{letter-spacing:-.02em}.aero-bright-ui h2{letter-spacing:-.015em}
+/* ── Hero copy (over dark image overlay) ────────── */
+.aero-hero-copy h2{color:#1e293b!important;text-shadow:none}
+.aero-hero-copy p{color:#334155!important}
 `}</style>}
 
 // ─── ROOT APP ─────────────────────────────────────────────
@@ -1388,18 +2513,19 @@ function AuthScreen({ onAuthenticated }) {
 
 // ─── App pages + lightweight client-side router ─────────────
 const ROUTES = [
-  { path:"/",        label:"Dashboard",              index:0 },
-  { path:"/map",     label:"NCR Map",                index:1 },
-  { path:"/forecast",label:"AQI Forecast",           index:2 },
-  { path:"/wrf-chem",label:"WRF-Chem",              index:3 },
-  { path:"/weather", label:"Weather & Atmosphere",   index:4 },
-  { path:"/plume",   label:"Plume Tracker",          index:5 },
-  { path:"/alerts",  label:"Alerts & Notifications", index:6 },
-  { path:"/stations",label:"Stations",               index:7 },
-  { path:"/reports", label:"Reports",                index:8 },
-  { path:"/pipeline",label:"Data Pipeline",          index:9 },
-  { path:"/ai",      label:"AI Insights",             index:10 },
-  { path:"/settings",label:"Profile & Settings",     index:11 },
+  { path:"/",           label:"Dashboard",              index:0 },
+  { path:"/map",        label:"NCR Map",                index:1 },
+  { path:"/forecast",   label:"72-Hour Forecast",       index:2 },
+  { path:"/wrf-chem",   label:"WRF-Chem",               index:3 },
+  { path:"/weather",    label:"Weather & Atmosphere",   index:4 },
+  { path:"/plume",      label:"Plume Tracker",          index:5 },
+  { path:"/alerts",     label:"Alerts & Notifications", index:6 },
+  { path:"/stations",   label:"Stations",               index:7 },
+  { path:"/reports",    label:"Forecast Validation",    index:8 },
+  { path:"/pipeline",   label:"Data Pipeline",          index:9 },
+  { path:"/ai",         label:"AI Insights",            index:10 },
+  { path:"/suggestions",label:"Decision Support",       index:11 },
+  { path:"/settings",   label:"Profile & Settings",     index:12 },
 ];
 
 function routeForIndex(index) { return ROUTES.find(r => r.index === index)?.path || "/"; }
@@ -1458,6 +2584,7 @@ function ForecastPage() {
   // ── Forecast data from backend ────────────────────────────────────────
   const [forecastState, setForecastState] = useState({
     loading: false, hourly: [], modelTrained: null, error: null, generatedAt: null,
+    source: null, // "ml" | "wrf" | null
   });
 
   useEffect(() => {
@@ -1466,30 +2593,81 @@ function ForecastPage() {
     let alive = true;
     setForecastState(s => ({ ...s, loading: true, error: null }));
 
+    // Normalise a /wrf-chem response into the same hourly shape the chart expects
+    const normaliseWrf = (payload) => {
+      const raw = Array.isArray(payload) ? payload
+        : Array.isArray(payload?.forecast) ? payload.forecast : [];
+      return raw.map((r, i) => ({
+        forecast_hour: r.forecast_hour ?? i,
+        target_utc: r.timestamp_utc ?? r.target_utc ?? null,
+        aqi_computed: r.aqi ?? r.aqi_computed ?? null,
+        pm25: r.pm25 ?? null,
+        pm10: r.pm10 ?? null,
+        o3:   r.o3  ?? null,
+        no2:  r.no2 ?? null,
+        aqi_category: r.aqi_category ?? null,
+      }));
+    };
+
+    const tryWrf = (prevHourly) => {
+      apiGet(`/wrf-chem/${encodeURIComponent(selectedId)}`)
+        .then(payload => {
+          if (!alive) return;
+          const hourly = normaliseWrf(payload);
+          if (hourly.length) {
+            setForecastState({
+              loading: false, hourly, modelTrained: true,
+              error: null, generatedAt: null, source: "wrf",
+            });
+          } else {
+            setForecastState(prev => ({
+              loading: false,
+              hourly: prevHourly ?? prev.hourly ?? [],
+              modelTrained: false,
+              error: "No forecast data available. Run ingestion + training to populate the ML model.",
+              generatedAt: null,
+              source: prev.source,
+            }));
+          }
+        })
+        .catch(() => {
+          if (!alive) return;
+          setForecastState(prev => ({
+            loading: false,
+            hourly: prevHourly ?? prev.hourly ?? [],
+            modelTrained: false,
+            error: "Forecast unavailable — ML model not trained and WRF-Chem endpoint returned no data.",
+            generatedAt: null,
+            source: prev.source,
+          }));
+        });
+    };
+
     apiGet(`/forecast/${encodeURIComponent(selectedId)}?hours=72`)
       .then(data => {
         if (!alive) return;
-        setForecastState({
-          loading: false,
-          hourly: data?.hourly ?? [],
-          modelTrained: data?.model_trained ?? false,
-          error: data?.model_trained === false ? (data?.message ?? "Model not trained yet.") : null,
-          generatedAt: data?.generated_at ?? null,
-        });
+        const rows = Array.isArray(data?.hourly) ? data.hourly : [];
+        if (rows.length && data?.model_trained !== false) {
+          setForecastState({
+            loading: false, hourly: rows, modelTrained: true,
+            error: null, generatedAt: data?.generated_at ?? null, source: "ml",
+          });
+        } else {
+          // ML endpoint returned no rows or model_trained=false — try WRF-Chem
+          tryWrf([]);
+        }
       })
       .catch(err => {
-  if (!alive) return;
-
-  setForecastState(prev => ({
-    loading: false,
-    hourly: prev.hourly?.length ? prev.hourly : [],
-    modelTrained: prev.hourly?.length ? prev.modelTrained : false,
-    error: prev.hourly?.length
-      ? "Live refresh unavailable — showing last synced forecast."
-      : `Forecast unavailable: ${err.message}`,
-    generatedAt: prev.hourly?.length ? prev.generatedAt : null,
-  }));
-});
+        if (!alive) return;
+        setForecastState(prev => {
+          if (prev.hourly?.length) {
+            return { ...prev, loading: false, error: "Live refresh unavailable — showing last synced forecast." };
+          }
+          // No cached data either — fall back to WRF-Chem
+          tryWrf([]);
+          return { ...prev, loading: true }; // keep spinner while WRF loads
+        });
+      });
 
     return () => { alive = false; };
   }, [selectedId]);
@@ -1531,12 +2709,14 @@ function ForecastPage() {
 
   const isLoading  = (stationsLoading && stations.length === 0) || (!stationsLoading && !!selectedId && forecastState.loading);
   const hasData    = chartData.length > 0;
-  const pollutantUnavailable = false;
+  // True when forecast rows exist but the selected pollutant column is entirely null
+  // (e.g. PM10 when no PM10 model was trained due to insufficient source data).
+  const pollutantUnavailable = hasData && vals.length === 0 && !forecastState.loading;
   const hasError   = forecastState.error && !forecastState.loading;
 
   return <>
     <PageHeader
-      title="AQI Forecast"
+      title="72-Hour Delhi-NCR Air Quality Forecast"
       subtitle="Interactive 72-hour prediction workspace with pollutant trends and station comparison."
       action={
         <div className="flex gap-2">
@@ -1562,26 +2742,32 @@ function ForecastPage() {
     />
 
     <FeatureSection
-      icon={<BarChart3 size={18} className="text-purple-400"/>}
+      icon={<BarChart3 size={18} className="text-purple-500"/>}
       title="72-Hour AQI Forecast"
-      subtitle={`${stationLabel} · ${hasData ? "AeroAQI Backend" : "awaiting data"} · pollutant selector`}
+      subtitle={`${stationLabel} · ${forecastState.source === "wrf" ? "WRF-Chem 72-hour model forecast" : forecastState.source === "ml" ? "AeroAQI ML Backend" : "awaiting data"} · pollutant selector`}
     >
       {/* ── Controls ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-hover)"}}>
+        <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
           {['AQI','PM2.5','PM10','NO2','O3'].map(v => (
             <button key={v} onClick={() => setPollutant(v)}
-              className={`px-3 py-1.5 rounded-md text-[10px] font-semibold ${pollutant===v?'text-[var(--text-primary)]':'text-[var(--text-muted)]'}`}
-              style={pollutant===v?{background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.22)"}:{}}>
+              className="px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors"
+              style={pollutant===v
+                ? {background:"var(--accent-green)", color:"#ffffff"}
+                : {color:"var(--text-secondary)"}
+              }>
               {v}
             </button>
           ))}
         </div>
-        <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-hover)"}}>
+        <div className="flex gap-1 p-1 rounded-lg" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
           {[24,48,72].map(v => (
             <button key={v} onClick={() => setHorizon(v)}
-              className={`px-3 py-1.5 rounded-md text-[10px] font-semibold ${horizon===v?'text-emerald-200':'text-[var(--text-muted)]'}`}
-              style={horizon===v?{background:"rgba(6,182,212,.08)",border:"1px solid rgba(6,182,212,.2)"}:{}}>
+              className="px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors"
+              style={horizon===v
+                ? {background:"var(--text-primary)", color:"#ffffff"}
+                : {color:"var(--text-secondary)"}
+              }>
               {v}h
             </button>
           ))}
@@ -1607,15 +2793,24 @@ function ForecastPage() {
         </div>
       )}
 
-      {/* ── Error / no-model state ───────────────────────────────────── */}
-      {hasError && !isLoading && (
+      {/* ── Error / no-model state — only shown when there is genuinely NO data ── */}
+      {hasError && !isLoading && !hasData && (
         <div className="h-[390px] flex flex-col items-center justify-center gap-3">
           <div className="rounded-xl px-5 py-4 text-center max-w-md"
-            style={{background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.16)"}}>
-            <p className="text-xs font-semibold text-amber-300 mb-1">Forecast unavailable</p>
-            <p className="text-[11px] text-[var(--text-muted)]">{forecastState.error}</p>
-            <p className="text-[10px] text-[var(--text-muted)] mt-2">Run: <code className="text-emerald-300">python scripts/train_model.py</code></p>
+            style={{background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.18)"}}>
+            <p className="text-sm font-semibold text-amber-700 mb-2">Forecast unavailable</p>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{forecastState.error}</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-3">
+              Run: <code className="text-emerald-600 font-mono">python scripts/train_model.py</code>
+            </p>
           </div>
+        </div>
+      )}
+      {/* Stale-data warning (show above chart, not instead of it) */}
+      {hasError && !isLoading && hasData && (
+        <div className="mb-3 px-3 py-2 rounded-xl text-xs text-amber-700 flex items-center gap-2"
+          style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.18)"}}>
+          <Info size={13}/>{forecastState.error}
         </div>
       )}
 
@@ -1682,7 +2877,7 @@ function ForecastPage() {
           ['Generated',       forecastState.generatedAt
                                 ? new Date(forecastState.generatedAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
                                 : '—'],
-          ['Source',          hasData ? 'AeroAQI Backend' : 'No data'],
+          ['Source', forecastState.source === "wrf" ? "WRF-Chem Model" : forecastState.source === "ml" ? "AeroAQI ML" : "No data"],
         ].map(([k,v]) => (
           <div key={k} className="rounded-xl p-3" style={{background:"var(--surface-secondary)",border:"1px solid var(--surface-hover)"}}>
             <p className="text-[10px] text-[var(--text-muted)]">{k}</p>
@@ -1769,37 +2964,58 @@ function DashboardPage({ navigate }) {
 
   const currentAqi = liveStation?.aqi;
   const currentPm25 = liveStation?.pm25;
-    const [dashboardForecast, setDashboardForecast] = useState([]);
+  const [dashboardForecast, setDashboardForecast] = useState([]);
+  const [dashboardForecastSource, setDashboardForecastSource] = useState(""); // "ml" | "wrf"
 
   useEffect(() => {
     if (!liveStation?.station_id) {
       setDashboardForecast([]);
+      setDashboardForecastSource("");
       return;
     }
 
     let alive = true;
 
+    const mapMlRows = rows => rows.map(h => ({
+      t: `+${h.forecast_hour}h`,
+      aqi: h.aqi_computed != null ? Math.round(h.aqi_computed) : null,
+      pm25: h.pm25 != null ? Math.round(h.pm25) : null,
+    }));
+
+    const tryWrf = () => {
+      apiGet(`/wrf-chem/${encodeURIComponent(liveStation.station_id)}`)
+        .then(payload => {
+          if (!alive) return;
+          const raw = Array.isArray(payload) ? payload
+            : Array.isArray(payload?.forecast) ? payload.forecast : [];
+          const rows = raw.map((r, i) => ({
+            t: `+${r.forecast_hour ?? i}h`,
+            aqi: (r.aqi ?? r.aqi_computed) != null ? Math.round(r.aqi ?? r.aqi_computed) : null,
+            pm25: r.pm25 != null ? Math.round(r.pm25) : null,
+          }));
+          if (alive) {
+            setDashboardForecast(rows);
+            setDashboardForecastSource(rows.length ? "wrf" : "");
+          }
+        })
+        .catch(() => alive && setDashboardForecast([]));
+    };
+
     apiGet(`/forecast/${encodeURIComponent(liveStation.station_id)}?hours=72`)
       .then(data => {
         if (!alive) return;
-
         const rows = Array.isArray(data?.hourly) ? data.hourly : [];
-
-        setDashboardForecast(
-          rows.map(h => ({
-            t: `+${h.forecast_hour}h`,
-            aqi: h.aqi_computed != null ? Math.round(h.aqi_computed) : null,
-            pm25: h.pm25 != null ? Math.round(h.pm25) : null,
-          }))
-        );
+        if (rows.length) {
+          setDashboardForecast(mapMlRows(rows));
+          setDashboardForecastSource("ml");
+        } else {
+          // ML model not trained yet — fall back to WRF-Chem
+          tryWrf();
+        }
       })
-      .catch(() => {
-        if (alive) setDashboardForecast([]);
-      });
+      .catch(() => { if (alive) tryWrf(); });
 
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [liveStation?.station_id]);
   const [slide,setSlide]=useState(0);
   const slides=[
@@ -1819,8 +3035,21 @@ function DashboardPage({ navigate }) {
         <div key={slide} className="animate-fade-in"><h2 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[.95] tracking-tight text-[var(--text-primary)]">{s.title}<br/><span className="text-emerald-300">{s.accent}</span></h2><p className="mt-5 text-sm sm:text-base text-[var(--text-secondary)] max-w-xl leading-relaxed">{s.sub}</p><div className="flex flex-wrap gap-3 mt-7"><button onClick={()=>navigate(s.path)} className="btn-primary px-5 py-3 rounded-xl text-xs font-bold flex items-center gap-2">{s.cta}<ArrowUpRight size={14}/></button><button onClick={()=>navigate('/map')} className="px-5 py-3 rounded-xl text-xs font-bold text-[var(--text-primary)]" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)",backdropFilter:"blur(10px)"}}>Explore NCR Map</button></div></div>
         <div className="flex items-center gap-2 mt-8">{slides.map((_,i)=><button key={i} onClick={()=>setSlide(i)} className="h-1.5 rounded-full transition-all" style={{width:i===slide?34:10,background:i===slide?"#22c55e":"rgba(255,255,255,.35)"}}/>)}<span className="text-[9px] text-[var(--text-muted)] ml-2">Auto carousel</span></div>
       </div>
-      <div className="absolute right-5 top-5 hidden xl:flex gap-2 animate-float"><div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.88)",border:"1px solid rgba(74,222,128,.25)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">Current AQI</p><p className="text-xl font-black text-red-400">{currentAqi == null ? "—" : Math.round(currentAqi)}</p></div><div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.88)",border:"1px solid rgba(74,222,128,.25)",backdropFilter:"blur(14px)"}}><p className="text-[9px] text-[var(--text-muted)]">72h peak</p><p className="text-xl font-black text-purple-600">{dashboardForecast.length ? Math.max(...dashboardForecast.map(row => row.aqi).filter(value => value != null)) : "—"}</p></div></div>
-      <div className="absolute bottom-0 left-0 right-0 h-16 flex items-center gap-5 px-6 overflow-hidden" style={{background:"var(--surface-secondary)",backdropFilter:"blur(10px)",borderTop:"1px solid rgba(74,222,128,.08)"}}><div className="flex gap-8 whitespace-nowrap animate-marquee text-[10px] text-[var(--text-secondary)]"><span>🟢 Good 0–50</span><span>🟡 Moderate 51–100</span><span>🟠 Sensitive 101–150</span><span>🔴 Unhealthy 151–200</span><span>🟣 Very Unhealthy 201–300</span><span>🌬 Wind transports pollution</span><span>🔥 Biomass burning can affect PM2.5</span></div></div>
+      <div className="absolute right-5 top-5 hidden xl:flex gap-2 animate-float">
+        <div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.92)",border:"1px solid rgba(5,150,105,.22)",backdropFilter:"blur(14px)"}}>
+          <p className="text-[9px] text-[var(--text-muted)]">Current AQI</p>
+          <p className="text-xl font-black" style={{color: currentAqi != null ? aqiMapColor(currentAqi) : "#64748b"}}>{currentAqi == null ? "—" : Math.round(currentAqi)}</p>
+        </div>
+        <div className="rounded-xl px-3 py-2" style={{background:"rgba(255,255,255,.92)",border:"1px solid rgba(5,150,105,.22)",backdropFilter:"blur(14px)"}}>
+          <p className="text-[9px] text-[var(--text-muted)]">72h Peak{dashboardForecastSource==="wrf"?" (WRF)":""}</p>
+          {(() => {
+            const aqiVals = dashboardForecast.map(r => r.aqi).filter(v => v != null);
+            const peak = aqiVals.length ? Math.max(...aqiVals) : null;
+            return <p className="text-xl font-black" style={{color: peak != null ? aqiMapColor(peak) : "#64748b"}}>{peak ?? "—"}</p>;
+          })()}
+        </div>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 h-12 flex items-center gap-5 px-6 overflow-hidden" style={{background:"var(--surface-secondary)",backdropFilter:"blur(10px)",borderTop:"1px solid var(--border)"}}><div className="flex gap-6 whitespace-nowrap animate-marquee text-[10px] text-[var(--text-secondary)]"><span className="text-emerald-700 font-semibold">Good 0–50</span><span>·</span><span className="text-amber-700 font-semibold">Moderate 51–100</span><span>·</span><span className="text-orange-700 font-semibold">Sensitive 101–150</span><span>·</span><span className="text-red-700 font-semibold">Unhealthy 151–200</span><span>·</span><span className="text-purple-700 font-semibold">Very Unhealthy 201–300</span><span>·</span><span className="text-[#7f1d1d] font-semibold">Hazardous 301+</span><span>·</span><span>Wind direction affects pollutant transport</span><span>·</span><span>Biomass burning raises PM2.5</span><span>·</span><span>AeroAQI monitors 79 Delhi-NCR stations</span></div></div>
     </section>
     <KpiStrip/>
 
@@ -1833,47 +3062,443 @@ function DashboardPage({ navigate }) {
 
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5"><FeatureSection icon={<BarChart3 size={18} className="text-purple-400"/>} title="Forecast Preview" subtitle="Open the full 72-hour prediction page"><div className="h-[250px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={dashboardForecast} margin={{top:5,right:5,left:-25,bottom:0}}><defs><linearGradient id="dash-aqi" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={.32}/><stop offset="95%" stopColor="#22c55e" stopOpacity={.01}/></linearGradient></defs><XAxis dataKey="t" hide/><YAxis hide/><Tooltip content={<ForecastTooltip/>}/><Area type="monotone" dataKey="aqi" stroke="#22c55e" strokeWidth={2} fill="url(#dash-aqi)"/></AreaChart></ResponsiveContainer></div><button onClick={()=>navigate('/forecast')} className="btn-primary w-full py-2.5 rounded-xl text-xs font-bold">Open AQI Forecast →</button></FeatureSection><AlertsPanel/></div>
     <QuickActions onAction={navigate}/>
+
+    {/* AQI Suggestions preview on Dashboard */}
+    {(() => {
+      const advice = aqiActionAdvice(currentAqi);
+      return (
+        <div className="aqi-action-card mt-1"
+          style={{borderLeftColor:advice.color, background:advice.bg, border:`1px solid ${advice.border}`, borderLeft:`4px solid ${advice.color}`}}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{color:advice.color}}>What should I do now?</p>
+              <h4 className="text-base font-black text-[var(--text-primary)]">{advice.title}</h4>
+              <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xl">{advice.desc}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                {advice.actions.slice(0,2).map((a,i)=>(
+                  <span key={i} className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                    <Check size={12} style={{color:advice.color}}/>{a}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button onClick={()=>navigate('/suggestions')}
+              className="btn-primary px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-2 flex-shrink-0">
+              Full guidance <ArrowUpRight size={13}/>
+            </button>
+          </div>
+        </div>
+      );
+    })()}
   </>;
 }
 
-function AIInsightsPage(){
-  const [question,setQuestion]=useState(""); const [answer,setAnswer]=useState(""); const [busy,setBusy]=useState(false); const {stations}=useLiveStations();
-  const ask=async()=>{setBusy(true);setAnswer("");try{const station=stations[0];if(!station)throw new Error("NO_STATION");let r;
+function AIInsightsPage() {
+  const { stations } = useLiveStations();
+  const [question,  setQuestion]  = useState("");
+  const [answer,    setAnswer]    = useState("");
+  const [busy,      setBusy]      = useState(false);
+  const [error,     setError]     = useState("");
+  const [speaking,  setSpeaking]  = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceLang, setVoiceLang] = useState("en-IN"); // en-IN | hi-IN
+  const utterRef   = useRef(null);
+  const recogRef   = useRef(null);
+
+  // ── Language detection ───────────────────────────────────
+  // Hinglish heuristic: contains Devanagari OR common romanised Hindi words
+  const detectLang = (text) => {
+    if (!text) return "en";
+    const hindi = /[\u0900-\u097F]/.test(text);
+    if (hindi) return "hi";
+    const hinglishWords = /\b(kya|hai|ka|ki|ke|kaise|kyu|kyun|nahi|aur|aaj|kal|bahut|kuch|mein|se|ko|par|agar|toh|hoga|hain|tha|thi|mere|teri|uska|karo|bata|samjhao|batao|kahan|kitna|kitni)\b/i;
+    if (hinglishWords.test(text)) return "hinglish";
+    return "en";
+  };
+
+  // ── Local fallback when Gemini is unavailable ────────────
+  const localFallback = (q, lang) => {
+    const st  = stations.find(s => s.hasObs) || stations[0];
+    if (!st) return lang === "hi" || lang === "hinglish"
+      ? "Backend se koi station data available nahi hai. Kripya backend check karein."
+      : "No station data is available. Please ensure the backend is running.";
+
+    const aqi  = st.aqi  != null ? Math.round(st.aqi)  : "N/A";
+    const pm25 = st.pm25 != null ? Math.round(st.pm25) : "N/A";
+    const pm10 = st.pm10 != null ? Math.round(st.pm10) : "N/A";
+    const o3   = st.o3   != null ? Math.round(st.o3)   : "N/A";
+    const no2  = st.no2  != null ? Math.round(st.no2)  : "N/A";
+    const temp = st.temperature_c  != null ? `${Math.round(st.temperature_c)}°C`  : "N/A";
+    const wind = st.wind_speed_ms  != null ? `${Number(st.wind_speed_ms).toFixed(1)} m/s` : "N/A";
+    const hum  = st.humidity != null ? `${Math.round(st.humidity)}%` : "N/A";
+
+    if (lang === "hi" || lang === "hinglish") {
+      return `${st.name} station ki current reading:\n` +
+        `• AQI: ${aqi}\n• PM2.5: ${pm25} µg/m³\n• PM10: ${pm10} µg/m³\n` +
+        `• O3: ${o3} µg/m³\n• NO2: ${no2} µg/m³\n` +
+        `• Temperature: ${temp}\n• Wind: ${wind}\n• Humidity: ${hum}\n\n` +
+        `(Gemini AI abhi unavailable hai — yeh local backend data hai.)`;
+    }
+    return `${st.name} station current readings:\n` +
+      `• AQI: ${aqi}\n• PM2.5: ${pm25} µg/m³\n• PM10: ${pm10} µg/m³\n` +
+      `• O3: ${o3} µg/m³\n• NO2: ${no2} µg/m³\n` +
+      `• Temperature: ${temp}\n• Wind: ${wind}\n• Humidity: ${hum}\n\n` +
+      `(Gemini AI is currently unavailable — this is live local backend data.)`;
+  };
+
+  // ── Ask Gemini ───────────────────────────────────────────
+  const ask = async () => {
+    const q = question.trim() || "Explain the current AQI and the main factors affecting it.";
+    setBusy(true); setAnswer(""); setError("");
+    const lang = detectLang(q);
+    try {
+      const station = stations[0];
+      if (!station) throw new Error("NO_STATION");
+      let r;
       try {
-        r = await apiPost("/gemini/chat", {
-          question: question.trim() || "Explain the current AQI and the main factors affecting it.",
-          station_id: station.station_id,
-        });
-      } catch (chatError) {
-        // Keep compatibility with the original backend route if /gemini/chat is not deployed yet.
+        r = await apiPost("/gemini/chat", { question: q, station_id: station.station_id });
+      } catch {
         r = await apiGet(`/gemini/explain/${encodeURIComponent(station.station_id)}`);
       }
-      setAnswer(r?.answer || r?.explanation || r?.message || JSON.stringify(r));}catch{setAnswer("Gemini is unavailable right now. Check the AeroAQI backend and GEMINI_API_KEY.")}finally{setBusy(false)}};
-  return <><PageHeader title="AI Insights" subtitle="Explainable air intelligence powered by the same backend forecast features." action={<button onClick={ask} disabled={busy} className="btn-primary px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2"><Sparkles size={13}/>{busy?"Reading model…":"Generate insight"}</button>}/><div className="grid grid-cols-1 xl:grid-cols-[1.25fr_.75fr] gap-5"><FeatureSection icon={<Bot size={18} className="text-emerald-300"/>} title="AeroAQI Explainable Forecast" subtitle="Real forecast explanation · feature contribution · confidence"><div className="rounded-2xl p-5" style={{background:"linear-gradient(145deg,var(--surface-secondary),var(--surface))",border:"1px solid rgba(74,222,128,.13)"}}><div className="science-ring"><Bot size={28} className="text-emerald-300"/></div><p className="text-xs font-bold text-[var(--text-primary)] mt-4">Backend reasoning</p><p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">{answer||"Ask AeroAQI AI to fetch the real model explanation from FastAPI."}</p></div></FeatureSection><FeatureSection icon={<MessageCircle size={18} className="text-emerald-300"/>} title="Ask AeroAQI AI" subtitle="Ask about the current forecast"><textarea value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Why may AQI rise in the next 12 hours?" className="w-full min-h-[120px] rounded-xl p-3 text-xs text-[var(--text-primary)] outline-none resize-none" style={{background:"var(--surface)",border:"1px solid rgba(74,222,128,.12)"}}/><button onClick={ask} disabled={busy} className="btn-primary w-full mt-3 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2"><Send size={13}/> {busy?"Analyzing…":"Explain with backend AI"}</button></FeatureSection></div></>;
+      setAnswer(r?.answer || r?.explanation || r?.message || JSON.stringify(r));
+    } catch {
+      // Gemini unavailable — show useful local-data response instead of blank page
+      setAnswer(localFallback(q, lang));
+      setError("Gemini AI is unavailable. Showing local backend data instead.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Text-to-speech ───────────────────────────────────────
+  const speak = () => {
+    if (!answer) return;
+    if (!window.speechSynthesis) {
+      setError("Text-to-speech is not supported in this browser.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const lang  = detectLang(answer);
+    const voice = window.speechSynthesis.getVoices()
+      .find(v => v.lang === (lang === "hi" || lang === "hinglish" ? "hi-IN" : "en-IN"))
+      || window.speechSynthesis.getVoices()[0];
+    const utt = new SpeechSynthesisUtterance(answer);
+    if (voice) utt.voice = voice;
+    utt.lang = lang === "hi" || lang === "hinglish" ? "hi-IN" : "en-IN";
+    utt.rate = 0.92;
+    utt.onstart  = () => setSpeaking(true);
+    utt.onend    = () => setSpeaking(false);
+    utt.onerror  = () => setSpeaking(false);
+    utterRef.current = utt;
+    window.speechSynthesis.speak(utt);
+  };
+
+  const stopSpeaking = () => {
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+  };
+
+  // ── Voice input ──────────────────────────────────────────
+  const startListening = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("Speech recognition is not supported in this browser (try Chrome).");
+      return;
+    }
+    if (recogRef.current) { recogRef.current.stop(); }
+    const recog = new SpeechRecognition();
+    recog.lang = voiceLang;
+    recog.interimResults = false;
+    recog.maxAlternatives = 1;
+    recog.onstart  = () => { setListening(true); setError(""); };
+    recog.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setQuestion(prev => prev ? `${prev} ${transcript}` : transcript);
+    };
+    recog.onerror  = (e) => {
+      setListening(false);
+      if (e.error !== "aborted") setError(`Microphone error: ${e.error}`);
+    };
+    recog.onend    = () => setListening(false);
+    recogRef.current = recog;
+    recog.start();
+  };
+
+  const stopListening = () => {
+    recogRef.current?.stop();
+    setListening(false);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    window.speechSynthesis?.cancel();
+    recogRef.current?.stop();
+  }, []);
+
+  // ── Quick prompts (English + Hinglish) ──────────────────
+  const quickPrompts = [
+    "What is the current Delhi AQI?",
+    "Delhi ka AQI kya hai?",
+    "Why is PM2.5 high today?",
+    "PM2.5 kyu zyada hai?",
+    "Which NCR station has the highest AQI?",
+    "Kal AQI badhega kya?",
+    "WRF-Chem kya predict kar raha hai?",
+    "Is it safe to exercise outdoors?",
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="AI Insights"
+        subtitle="Ask AeroAQI AI in English, Hindi, or Hinglish — uses local backend data + optional AI explanation."
+        action={
+          <button onClick={ask} disabled={busy}
+            className="btn-primary px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2">
+            <Sparkles size={13}/>
+            {busy ? "Analyzing…" : "Ask AI"}
+          </button>
+        }
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_.7fr] gap-5">
+
+        {/* ── Answer panel ── */}
+        <FeatureSection
+          icon={<Bot size={18} className="text-emerald-600"/>}
+          title="AeroAQI AI Response"
+          subtitle="English · Hindi · Hinglish — answers use current backend data">
+
+          <div className="rounded-2xl p-5 min-h-[220px] relative"
+            style={{background:"linear-gradient(145deg,var(--surface-secondary),var(--surface))",
+                    border:"1px solid var(--border)"}}>
+
+            {/* Loading spinner */}
+            {busy && (
+              <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                <RefreshCw size={16} className="animate-spin text-emerald-600"/>
+                <span className="text-sm">Analyzing your question…</span>
+              </div>
+            )}
+
+            {/* Answer text */}
+            {!busy && answer && (
+              <>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{answer}</p>
+                {/* TTS controls */}
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--border)]">
+                  {!speaking
+                    ? <button onClick={speak}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-[var(--surface-hover)]"
+                        style={{background:"var(--surface-secondary)",border:"1px solid var(--border)",color:"var(--text-secondary)"}}>
+                        <Play size={12} className="text-emerald-600"/>Read aloud
+                      </button>
+                    : <button onClick={stopSpeaking}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                        style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",color:"#b91c1c"}}>
+                        <Pause size={12}/>Stop
+                      </button>
+                  }
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    Detected language: {(() => { const l=detectLang(answer); return l==="hi"?"Hindi":l==="hinglish"?"Hinglish":"English"; })()}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Idle state */}
+            {!busy && !answer && (
+              <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                <div className="science-ring"><Bot size={26} className="text-emerald-600"/></div>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mt-2">Ask anything about Delhi-NCR air quality</p>
+                <p className="text-xs text-[var(--text-muted)] max-w-xs">English, Hindi, or Hinglish — I'll reply in the same language</p>
+              </div>
+            )}
+          </div>
+
+          {/* Error banner */}
+          {error && (
+            <div className="mt-3 px-4 py-2.5 rounded-xl text-xs text-amber-700 flex items-center gap-2"
+              style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.2)"}}>
+              <Info size={13}/>{error}
+            </div>
+          )}
+        </FeatureSection>
+
+        {/* ── Chat input panel ── */}
+        <FeatureSection
+          icon={<MessageCircle size={18} className="text-emerald-600"/>}
+          title="Ask AeroAQI AI"
+          subtitle="Type or speak your question">
+
+          {/* Voice language selector */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] text-[var(--text-muted)] font-semibold uppercase tracking-wide">Voice lang:</span>
+            {[["en-IN","English"],["hi-IN","Hindi"]].map(([code,label]) => (
+              <button key={code} onClick={() => setVoiceLang(code)}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors"
+                style={voiceLang===code
+                  ? {background:"var(--accent-green)",color:"#fff"}
+                  : {background:"var(--surface-secondary)",color:"var(--text-secondary)",border:"1px solid var(--border)"}}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Textarea + mic */}
+          <div className="relative">
+            <textarea
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              onKeyDown={e => { if (e.key==="Enter" && (e.ctrlKey||e.metaKey)) ask(); }}
+              placeholder={"Type or speak your question…\n\nExamples:\n• What is the Delhi AQI?\n• Delhi ka AQI kya hai?\n• PM2.5 kyu zyada hai?"}
+              className="w-full rounded-xl p-3 pr-12 text-xs text-[var(--text-primary)] outline-none resize-none"
+              style={{
+                minHeight:140,
+                background:"var(--surface)",
+                border:"1px solid var(--border)",
+                lineHeight:1.6,
+              }}
+            />
+            {/* Mic button */}
+            <button
+              onClick={listening ? stopListening : startListening}
+              title={listening ? "Stop listening" : "Start voice input"}
+              className="absolute bottom-3 right-3 w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+              style={listening
+                ? {background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",color:"#b91c1c",animation:"pulse-live 1s ease-in-out infinite"}
+                : {background:"var(--surface-secondary)",border:"1px solid var(--border)",color:"var(--text-secondary)"}}>
+              {listening ? <Radio size={15}/> : <Radio size={15}/>}
+            </button>
+          </div>
+
+          {listening && (
+            <p className="text-[10px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1.5">
+              <span className="live-dot w-1.5 h-1.5 rounded-full bg-emerald-500"/>
+              Listening… speak now ({voiceLang === "hi-IN" ? "Hindi" : "English"})
+            </p>
+          )}
+
+          <button onClick={ask} disabled={busy}
+            className="btn-primary w-full mt-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+            <Send size={13}/>
+            {busy ? "Analyzing…" : "Ask AI (Ctrl+Enter)"}
+          </button>
+
+          {/* Quick prompts */}
+          <div className="mt-4">
+            <p className="text-[10px] text-[var(--text-muted)] uppercase font-semibold tracking-wide mb-2">Quick prompts</p>
+            <div className="flex flex-wrap gap-1.5">
+              {quickPrompts.map(p => (
+                <button key={p}
+                  onClick={() => { setQuestion(p); }}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors hover:bg-[var(--surface-hover)]"
+                  style={{background:"var(--surface-secondary)",border:"1px solid var(--border)",color:"var(--text-secondary)"}}>
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FeatureSection>
+      </div>
+    </>
+  );
 }
 
 function MapInsightsPanel() {
   const {stations, loading} = useLiveStations();
-  const station = stations[0];
+  const station = stations.find(s => s.hasObs) || stations[0] || null;
   const [forecast, setForecast] = useState([]);
+
   useEffect(() => {
     if (!station?.station_id) return undefined;
     let alive = true;
-    apiGet(`/forecast/${encodeURIComponent(station.station_id)}?hours=72`).then(data => alive && setForecast(data?.hourly ?? [])).catch(() => alive && setForecast([]));
+    // Try ML forecast first, fall back to WRF-Chem
+    apiGet(`/forecast/${encodeURIComponent(station.station_id)}?hours=72`)
+      .then(data => {
+        if (!alive) return;
+        const rows = data?.hourly ?? [];
+        if (rows.length) { setForecast(rows); return; }
+        return apiGet(`/wrf-chem/${encodeURIComponent(station.station_id)}`);
+      })
+      .then(payload => {
+        if (!alive || !payload) return;
+        const raw = Array.isArray(payload) ? payload : (payload?.forecast ?? []);
+        setForecast(raw);
+      })
+      .catch(() => alive && setForecast([]));
     return () => { alive = false; };
   }, [station?.station_id]);
-  const fmt = value => value == null ? "No observation" : Number(value).toFixed(1);
-  const fireRows = (stations.slice(0, 4)).map((item, index) => ({time: new Date(Date.now() - index * 3600000).toLocaleTimeString("en-IN", {hour:"2-digit", minute:"2-digit"}), lat: item.lat, lon: item.lon, frp: 18 + index * 7, location: item.city || item.name}));
-  return <div className="space-y-4">
-    <div className="rounded-2xl p-4" style={{background:"linear-gradient(145deg,rgba(8,37,26,.92),rgba(5,22,16,.9))",border:"1px solid rgba(74,222,128,.14)"}}>
-      <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-[var(--text-primary)]">Plume Tracker</p><p className="text-[10px] text-[var(--text-muted)]">Predicted pollution movement</p></div><span className="source-pill">Prototype / Simulated</span></div>
-      <div className="grid grid-cols-3 gap-1 mt-4 text-[9px] text-[var(--text-muted)]">{["Now","+12h","+24h","+36h","+48h","+72h"].map(label=><span key={label} className="rounded-md px-2 py-2 text-center" style={{background:"rgba(255,255,255,.04)"}}>{label}</span>)}</div>
-      <div className="grid grid-cols-3 gap-2 mt-3">{[["Fire Count","12"],["PM2.5 contribution","18%"],["Dominant wind","WNW"]].map(([label,value])=><div key={label} className="rounded-lg p-2" style={{background:"rgba(255,255,255,.035)"}}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-xs font-bold text-[var(--text-primary)] mt-1">{value}</p></div>)}</div>
-      <div className="mt-3 rounded-lg p-2 text-[9px] text-[var(--text-muted)]" style={{background:"rgba(249,115,22,.07)"}}>Plume impact: <b className="text-orange-300">Moderate</b> · Prototype / Simulated</div>
-      <p className="text-[10px] font-bold text-[var(--text-primary)] mt-4 mb-2">Recent Fire Detections</p><div className="overflow-x-auto"><table className="w-full text-[9px]"><thead><tr className="text-left text-[var(--text-muted)]">{["Time","Latitude","Longitude","FRP","Location"].map(label=><th key={label} className="px-1 py-1">{label}</th>)}</tr></thead><tbody>{fireRows.map(row=><tr key={`${row.time}-${row.lat}`} className="border-t border-white/[.06] text-[var(--text-secondary)]"><td className="px-1 py-1">{row.time}</td><td className="px-1 py-1">{row.lat.toFixed(3)}</td><td className="px-1 py-1">{row.lon.toFixed(3)}</td><td className="px-1 py-1">{row.frp}</td><td className="px-1 py-1">{row.location}</td></tr>)}</tbody></table></div>
+
+  const fmtNum = v => (v == null || !Number.isFinite(Number(v))) ? "—" : Number(v).toFixed(1);
+  const aqiVals = forecast.map(r => Number(r.aqi_computed ?? r.aqi)).filter(Number.isFinite);
+  const peakAqi = aqiVals.length ? Math.max(...aqiVals) : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Current conditions card */}
+      <div className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">Current Atmospheric Conditions</p>
+            <p className="text-[10px] text-[var(--text-muted)] truncate max-w-[180px]">{station?.name ?? (loading ? "Loading…" : "No station")}</p>
+          </div>
+          <span className="source-pill">Prototype / Simulated</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ["AQI",       station?.aqi != null ? Math.round(station.aqi) : "—", station?.aqi != null ? aqiMapColor(station.aqi) : "#64748b"],
+            ["PM2.5",     station?.pm25 != null ? Math.round(station.pm25) : "—", "#0891b2"],
+            ["Wind",      station?.wind_speed_ms != null ? `${Number(station.wind_speed_ms).toFixed(1)}` : "—", "#059669"],
+          ].map(([lbl, val, col]) => (
+            <div key={lbl} className="rounded-xl p-2.5 text-center" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <p className="text-[9px] text-[var(--text-muted)]">{lbl}</p>
+              <p className="text-base font-black mt-1" style={{color:col}}>{val}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Plume transport prototype */}
+      <div className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-bold text-[var(--text-primary)]">Plume Transport</p>
+          <span className="source-pill flex items-center gap-1"><Info size={9}/> Prototype</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {[["Dom. Wind","WNW"],["Transport","High"],["Source","Punjab/HR"]].map(([l,v]) => (
+            <div key={l} className="rounded-lg p-2" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <p className="text-[9px] text-[var(--text-muted)]">{l}</p>
+              <p className="text-xs font-bold text-[var(--text-primary)] mt-0.5">{v}</p>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-lg p-2.5 text-[10px] text-orange-700 flex items-center gap-2"
+          style={{background:"rgba(234,88,12,.06)",border:"1px solid rgba(234,88,12,.18)"}}>
+          <Flame size={11} className="text-orange-500 flex-shrink-0"/>
+          Biomass transport risk: <b className="ml-0.5">Moderate</b> · Prototype / Simulated
+        </div>
+      </div>
+
+      {/* 72-hour forecast mini-card */}
+      <div className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}}>
+        <p className="text-xs font-bold text-[var(--text-primary)] mb-3">72-Hour Forecast</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ["Current AQI", forecast.length ? fmtNum(forecast[0]?.aqi_computed ?? forecast[0]?.aqi) : "—"],
+            ["Peak AQI",    peakAqi != null ? String(Math.round(peakAqi)) : "—"],
+            ["Rows",        forecast.length || "—"],
+          ].map(([lbl, val]) => (
+            <div key={lbl} className="rounded-lg p-2" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <p className="text-[9px] text-[var(--text-muted)]">{lbl}</p>
+              <p className="text-sm font-black text-[var(--text-primary)] mt-1">{val}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
-    <div className="rounded-2xl p-4" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}><p className="text-xs font-bold text-[var(--text-primary)] mb-3">72-Hour Forecast · {station?.name || (loading ? "Loading" : "No station")}</p><div className="grid grid-cols-3 gap-2">{[["Current AQI",forecast[0]?.aqi_computed], ["Peak AQI",forecast.length?Math.max(...forecast.map(row=>Number(row.aqi_computed)).filter(Number.isFinite)):null], ["Forecast rows",forecast.length || null]].map(([label,value])=><div key={label} className="rounded-lg p-2" style={{background:"var(--surface-secondary)"}}><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="text-sm font-black text-[var(--text-primary)] mt-1">{value == null ? "No observation" : typeof value === "number" ? fmt(value) : value}</p></div>)}</div></div>
-  </div>;
+  );
 }
 
 function MapBottomInsights() {
@@ -1899,7 +3524,7 @@ function AlertsPage() {
   return <><PageHeader title="Alerts & Notifications" subtitle="AQI risk events and actionable monitoring alerts."/><AlertsPanel/></>;
 }
 function StationsPage(){
-  const {stations,live,loading}=useLiveStations();
+  const {stations,live,loading,stale,error}=useLiveStations();
   const [query,setQuery]=useState("");
   // Start null; set to a real station once the hook resolves.
   // Prefer a station with real observation data so the detail panel has values to show.
@@ -1923,10 +3548,13 @@ function StationsPage(){
   const filtered=stations.filter(s=>s.name.toLowerCase().includes(query.toLowerCase()));
   // dot map includes "unknown" for stations without obs data
   const dot={good:"#22c55e",moderate:"#eab308",sensitive:"#f97316",unhealthy:"#ef4444",very:"#a855f7",unknown:"#64748b"};
-  return <><PageHeader title="Monitoring Stations" subtitle="NCR monitoring network — inspect local AQI, pollutants, source and weather context." action={<span className="source-pill">{loading?"Updating…":live?"LIVE · AeroAQI Backend":"Unavailable"}</span>}/><div className="grid grid-cols-1 xl:grid-cols-[330px_1fr] gap-5">
+  return <><PageHeader title="Monitoring Stations" subtitle="NCR monitoring network — inspect local AQI, pollutants, source and weather context." action={<span className="source-pill">{loading?"Updating…":live?"LIVE · AeroAQI Backend":"Unavailable"}</span>}/>
+  {stale&&<div className="mb-3 px-4 py-2.5 rounded-xl text-[11px] text-amber-700 flex items-center gap-2" style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.2)"}}><Info size={13}/>Live refresh unavailable — showing last synced data.</div>}
+  {error&&!stale&&<div className="mb-3 px-4 py-2.5 rounded-xl text-[11px] text-red-600 flex items-center gap-2" style={{background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.18)"}}><AlertTriangle size={13}/>{error}</div>}
+  <div className="grid grid-cols-1 xl:grid-cols-[330px_1fr] gap-5">
     <FeatureSection icon={<Navigation size={18} className="text-emerald-300"/>} title="NCR Station Network" subtitle={`${filtered.length} of ${stations.length} monitoring points`}>
       <div className="relative mb-3"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search station or city" className="w-full rounded-xl pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] outline-none" style={{background:"var(--surface)",border:"1px solid var(--surface-hover)"}}/></div>
-      <div className="space-y-2 max-h-[570px] overflow-y-auto pr-1">{filtered.map(s=><button key={s.station_id||s.name} onClick={()=>setSelected(s)} className="w-full p-3 rounded-xl text-left transition-all hover:translate-x-1" style={{background:selected?.station_id===s.station_id?"rgba(34,211,238,.08)":"var(--surface-secondary)",border:`1px solid ${selected?.station_id===s.station_id?"rgba(34,211,238,.2)":"var(--surface-hover)"}`}}><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-xs font-bold text-[var(--text-primary)] truncate">{s.name}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.station_id} · {s.city||"No city"}, {s.state||"No state"}</p><p className="text-[9px] text-[var(--text-muted)]">{Number.isFinite(s.lat)?s.lat.toFixed(4):"No observation"}, {Number.isFinite(s.lon)?s.lon.toFixed(4):"No observation"}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.agency||"No observation"} · {s.timestamp?new Date(s.timestamp).toLocaleString("en-IN"):"No observation"}</p><p className="text-[9px] text-[var(--text-secondary)] mt-1">PM2.5 {s.pm25!=null?Math.round(s.pm25):"No observation"} · PM10 {s.pm10!=null?Math.round(s.pm10):"No observation"} · O3 {s.o3!=null?Math.round(s.o3):"No observation"} · NO2 {s.no2!=null?Math.round(s.no2):"No observation"}</p></div><div className="text-right shrink-0"><p className="text-lg font-black" style={{color:dot[s.status]||"#64748b"}}>{s.aqi!=null?s.aqi:"No observation"}</p><p className="text-[8px] text-[var(--text-muted)]">AQI</p></div></div></button>)}</div>
+      <div className="space-y-2 max-h-[570px] overflow-y-auto pr-1">{filtered.map(s=><button key={s.station_id||s.name} onClick={()=>setSelected(s)} className="w-full p-3 rounded-xl text-left transition-all hover:translate-x-1" style={{background:selected?.station_id===s.station_id?"rgba(34,211,238,.08)":"var(--surface-secondary)",border:`1px solid ${selected?.station_id===s.station_id?"rgba(34,211,238,.2)":"var(--surface-hover)"}`}}><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-xs font-bold text-[var(--text-primary)] truncate">{s.name}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.station_id} · {s.city||"No city"}, {s.state||"No state"}</p><p className="text-[9px] text-[var(--text-muted)]">{Number.isFinite(s.lat)?s.lat.toFixed(4):"No observation"}, {Number.isFinite(s.lon)?s.lon.toFixed(4):"No observation"}</p><p className="text-[9px] text-[var(--text-muted)] truncate">{s.agency||"No observation"} · {s.timestamp?new Date(s.timestamp).toLocaleString("en-IN"):"No observation"}</p><p className="text-[9px] text-[var(--text-secondary)] mt-1">PM2.5 {s.pm25!=null?Math.round(s.pm25):"No observation"} · PM10 {s.pm10!=null?Math.round(s.pm10):"No observation"} · O3 {s.o3!=null?Math.round(s.o3):"No observation"} · NO2 {s.no2!=null?Math.round(s.no2):"No observation"}</p></div><div className="text-right shrink-0"><p className="text-lg font-black" style={{color:dot[s.status]||"#64748b"}}>{s.aqi!=null?Math.round(s.aqi):"—"}</p><p className="text-[8px] text-[var(--text-muted)]">AQI</p></div></div></button>)}</div>
     </FeatureSection>
     {selected&&<FeatureSection icon={<MapPinned size={18} className="text-emerald-300"/>} title={`${selected.name} Station`} subtitle="Selected monitoring point · pollutant snapshot · local trend">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">{[["AQI",selected.aqi,null, dot[selected.status]||"#64748b"],["PM2.5",selected.pm25,null,"#38bdf8"],["PM10",selected.pm10,null,"#a78bfa"],["O3",selected.o3,null,"#34d399"],["NO₂",selected.no2,null,"#fb923c"]].map(([a,b,c,col])=><div key={a} className="science-card p-4 rounded-xl"><p className="text-[10px] text-[var(--text-muted)]">{a}</p><p className="text-xl font-black mt-1" style={{color:col}}>{b!=null?Math.round(b):"No observation"}</p><p className="text-[9px] text-[var(--text-muted)] mt-1">{c|| (a==="AQI" ? "No observation" : "µg/m³")}</p></div>)}</div>
@@ -1936,7 +3564,175 @@ function StationsPage(){
 }
 
 function ReportsPage() {
-  return <><PageHeader title="Reports & Analytics" subtitle="Export a compact AeroAQI report or print the current analysis."/><ReportsSection/></>;
+  return <><PageHeader title="Forecast Validation" subtitle="Validate backend station data and export a compact analysis report."/><ReportsSection/></>;
+}
+
+// ─── Suggestions Page ──────────────────────────────────────
+function aqiActionAdvice(aqi) {
+  if (aqi == null) return {
+    title: "Monitor conditions",
+    desc: "AQI data is not currently available. Stay updated and check back soon.",
+    color: "#64748b", bg: "rgba(100,116,139,.08)", border: "rgba(100,116,139,.18)",
+    actions: ["Check your local monitoring station", "Stay informed via AeroAQI"],
+  };
+  if (aqi <= 50)  return {
+    title: "Air quality is Good",
+    desc: "Great conditions for outdoor activities. Enjoy the clean air.",
+    color: "#15803d", bg: "rgba(22,163,74,.06)", border: "rgba(22,163,74,.22)",
+    actions: ["Normal outdoor activities are fine", "Ideal for exercise and sports", "Keep windows open for fresh air", "Continue monitoring trends"],
+  };
+  if (aqi <= 100) return {
+    title: "Air quality is Moderate",
+    desc: "Acceptable for most people. A small number of sensitive individuals may experience mild discomfort.",
+    color: "#b45309", bg: "rgba(217,119,6,.06)", border: "rgba(217,119,6,.22)",
+    actions: ["Most outdoor activities are fine", "Sensitive individuals: monitor symptoms", "Reduce prolonged exposure if uncomfortable", "Keep track of AQI trends"],
+  };
+  if (aqi <= 150) return {
+    title: "Unhealthy for Sensitive Groups",
+    desc: "People with respiratory or heart conditions, children, and older adults should take precautions.",
+    color: "#c2410c", bg: "rgba(234,88,12,.06)", border: "rgba(234,88,12,.22)",
+    actions: ["Reduce prolonged outdoor exertion", "Keep prescribed medication accessible", "Choose indoor activities where possible", "Monitor AQI regularly throughout the day"],
+  };
+  if (aqi <= 200) return {
+    title: "Air quality is Unhealthy",
+    desc: "Everyone may begin to experience health effects. Sensitive groups face more serious effects.",
+    color: "#b91c1c", bg: "rgba(220,38,38,.06)", border: "rgba(220,38,38,.22)",
+    actions: ["Reduce prolonged or heavy outdoor activity", "Spend more time indoors", "Keep windows closed when outdoor AQ is poor", "Sensitive groups: avoid outdoor exposure"],
+  };
+  if (aqi <= 300) return {
+    title: "Very Unhealthy — Take Precautions",
+    desc: "Health alert: everyone may experience more serious health effects. Limit outdoor time.",
+    color: "#7e22ce", bg: "rgba(126,34,206,.06)", border: "rgba(126,34,206,.22)",
+    actions: ["Avoid unnecessary outdoor exposure", "Sensitive groups: stay indoors", "Use air purifiers indoors if available", "Follow local health guidance and advisories"],
+  };
+  return {
+    title: "Hazardous — Stay Indoors",
+    desc: "Health warning of emergency conditions. The entire population is more likely to be affected.",
+    color: "#7f1d1d", bg: "rgba(127,29,29,.07)", border: "rgba(127,29,29,.25)",
+    actions: ["Avoid all outdoor exposure", "Stay indoors in cleaner-air environments", "Follow official public-health advisories", "Seek medical help if you experience serious symptoms"],
+  };
+}
+
+const SENSITIVE_GROUPS = [
+  { icon: <Wind size={15}/>,       label: "Asthma / Respiratory",   note: "Follow your clinician's plan; keep rescue medication accessible." },
+  { icon: <Users size={15}/>,      label: "Children",               note: "Reduce prolonged outdoor play during high-AQI periods." },
+  { icon: <User size={15}/>,       label: "Older Adults",           note: "Monitor symptoms and avoid strenuous outdoor activity." },
+  { icon: <Heart size={15}/>,      label: "Heart Conditions",       note: "Consult your doctor about activity levels when AQI is high." },
+  { icon: <Activity size={15}/>,   label: "Lung Conditions",        note: "High AQI can worsen symptoms. Stay informed and take precautions." },
+  { icon: <ShieldCheck size={15}/>,label: "Pregnant People",        note: "Reduce prolonged exposure; discuss concerns with your clinician." },
+];
+
+const GENERAL_TIPS = [
+  { icon: <Eye size={15}/>,        tip: "Check AQI before outdoor activities, especially early morning or evening." },
+  { icon: <Wind size={15}/>,       tip: "Ventilate your home when outdoor AQI is below 100; keep windows closed when above 150." },
+  { icon: <Thermometer size={15}/>,tip: "Higher temperatures can accelerate ozone formation — monitor O3 levels on hot days." },
+  { icon: <Flame size={15}/>,      tip: "Avoid burning waste. Indoor cooking fires and diesel vehicles are major pollution contributors." },
+  { icon: <CloudSun size={15}/>,   tip: "Wind and rain help clear pollution. Wind direction affects which areas are worst affected." },
+  { icon: <Activity size={15}/>,   tip: "High-intensity exercise increases pollutant intake — move workouts indoors on high-AQI days." },
+];
+
+function SuggestionsPage() {
+  const { stations } = useLiveStations();
+  const liveStation = stations.find(s => s.hasObs) || stations[0] || null;
+  const currentAqi = liveStation?.aqi != null ? Math.round(liveStation.aqi) : null;
+  const advice = aqiActionAdvice(currentAqi);
+
+  return <>
+    <PageHeader
+      title="Decision Support — Air Quality Guidance"
+      subtitle="Practical guidance based on current atmospheric conditions. Not a substitute for professional medical advice."
+    />
+
+    {/* AQI Action Card */}
+    <div className="aqi-action-card mb-5" style={{borderLeftColor: advice.color, background: advice.bg, border: `1px solid ${advice.border}`, borderLeft: `4px solid ${advice.color}`}}>
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-black uppercase tracking-widest" style={{color: advice.color}}>
+              Current Recommendation
+            </span>
+            {currentAqi != null && (
+              <span className="text-xs font-black px-2 py-0.5 rounded-full text-white" style={{background: advice.color}}>
+                AQI {currentAqi}
+              </span>
+            )}
+          </div>
+          <h3 className="text-lg font-black text-[var(--text-primary)] mb-1">{advice.title}</h3>
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">{advice.desc}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {advice.actions.map((a, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <Check size={14} className="mt-0.5 flex-shrink-0" style={{color: advice.color}}/>
+                <p className="text-sm text-[var(--text-secondary)]">{a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="sm:text-right shrink-0">
+          <p className="text-[10px] text-[var(--text-muted)]">Based on</p>
+          <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5">{liveStation?.name ?? "No station"}</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{liveStation ? "Live backend data" : "Backend unavailable"}</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+      {/* Sensitive Groups */}
+      <FeatureSection icon={<ShieldCheck size={17} className="text-emerald-600"/>} title="Sensitive Groups" subtitle="Extra precautions for people with underlying health conditions">
+        <div className="space-y-3">
+          {SENSITIVE_GROUPS.map(g => (
+            <div key={g.label} className="flex items-start gap-3 p-3 rounded-xl" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-emerald-600" style={{background:"var(--accent-green-muted)"}}>
+                {g.icon}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{g.label}</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{g.note}</p>
+              </div>
+            </div>
+          ))}
+          <div className="rounded-xl p-3 text-xs text-[var(--text-secondary)] leading-relaxed" style={{background:"rgba(5,150,105,.04)",border:"1px solid rgba(5,150,105,.14)"}}>
+            <ShieldCheck size={12} className="inline mr-1.5 text-emerald-600"/>
+            This guidance is general. If you have a medical condition, always follow your clinician's advice. Seek medical help if you experience serious or worsening symptoms.
+          </div>
+        </div>
+      </FeatureSection>
+
+      {/* General tips */}
+      <FeatureSection icon={<Info size={17} className="text-blue-500"/>} title="General Air Quality Tips" subtitle="Everyday actions to reduce exposure and protect health">
+        <div className="space-y-2.5">
+          {GENERAL_TIPS.map((t, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-xl transition-colors hover:bg-[var(--surface-hover)]" style={{background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-blue-500" style={{background:"rgba(59,130,246,.08)"}}>
+                {t.icon}
+              </div>
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{t.tip}</p>
+            </div>
+          ))}
+        </div>
+      </FeatureSection>
+    </div>
+
+    {/* AQI scale reference */}
+    <FeatureSection icon={<Gauge size={17} className="text-purple-600"/>} title="AQI Reference Scale" subtitle="Understanding what the numbers mean">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          {range:"0–50",   label:"Good",             advice:"No restrictions",                   color:"#15803d", bg:"rgba(22,163,74,.06)",  border:"rgba(22,163,74,.2)"},
+          {range:"51–100", label:"Moderate",          advice:"Sensitive: monitor symptoms",       color:"#b45309", bg:"rgba(217,119,6,.06)",  border:"rgba(217,119,6,.2)"},
+          {range:"101–150",label:"Sensitive Groups",  advice:"Reduce prolonged outdoor exertion", color:"#c2410c", bg:"rgba(234,88,12,.06)",  border:"rgba(234,88,12,.2)"},
+          {range:"151–200",label:"Unhealthy",         advice:"Reduce outdoor activity",           color:"#b91c1c", bg:"rgba(220,38,38,.06)",  border:"rgba(220,38,38,.2)"},
+          {range:"201–300",label:"Very Unhealthy",    advice:"Avoid outdoor exposure",            color:"#7e22ce", bg:"rgba(126,34,206,.06)", border:"rgba(126,34,206,.2)"},
+          {range:"301+",   label:"Hazardous",         advice:"Stay indoors",                      color:"#7f1d1d", bg:"rgba(127,29,29,.07)",  border:"rgba(127,29,29,.2)"},
+        ].map(s => (
+          <div key={s.range} className="rounded-xl p-3 text-center" style={{background:s.bg, border:`1px solid ${s.border}`}}>
+            <p className="text-base font-black" style={{color:s.color}}>{s.range}</p>
+            <p className="text-xs font-bold text-[var(--text-primary)] mt-1">{s.label}</p>
+            <p className="text-[10px] text-[var(--text-secondary)] mt-1 leading-snug">{s.advice}</p>
+          </div>
+        ))}
+      </div>
+    </FeatureSection>
+  </>;
 }
 function PipelinePage() {
   return <><PageHeader title="Data Pipeline" subtitle="The AeroAQI flow from observations to features, ML forecast and REST API."/><PipelineSection/></>;
@@ -1999,7 +3795,14 @@ export default function App() {
     localStorage.setItem("aeroaqi_user", JSON.stringify(next));
   };
 
-  if (!user) return <><AeroMotionStyles/><AuthScreen onAuthenticated={(u)=>{setUser(u); navigate('/');}}/></>;
+  // Auto-provide a guest session so the scientific dashboard is always accessible
+  // without requiring login. Users can still update their name in Profile & Settings.
+  if (!user) {
+    const guest = { name: "AeroAQI User", photo: "" };
+    localStorage.setItem("aeroaqi_user", JSON.stringify(guest));
+    setUser(guest);
+    return null; // brief flicker avoided — React will re-render immediately
+  }
 
   const activeNav = indexForPath(path);
   const page = (() => {
@@ -2015,6 +3818,7 @@ export default function App() {
       case "/reports": return <ReportsPage/>;
       case "/pipeline": return <PipelinePage/>;
       case "/ai": return <AIInsightsPage/>;
+      case "/suggestions": return <SuggestionsPage/>;
       case "/settings": return <SettingsPage user={user} onLogout={handleLogout} onProfileSaved={handleProfileSaved}/>;
       default: return <NotFoundPage navigate={navigate}/>;
     }
@@ -2074,6 +3878,8 @@ function WRFChemSection() {
   const [showAll, setShowAll] = useState(false);
   const [state, setState] = useState({ loading: false, data: null, error: null });
   const [network, setNetwork] = useState({ loading: false, rows: [], error: null });
+  const [wrfZoom, setWrfZoom] = useState(10);
+  const wrfCanvasRef = useRef(null);
 
   const normalizeWrfResponse = (payload, fallbackStationId) => {
     const raw = Array.isArray(payload)
@@ -2249,13 +4055,259 @@ function WRFChemSection() {
   const aqiColour = value => {
     const v = Number(value);
     if (!Number.isFinite(v)) return "#64748b";
-    if (v <= 50) return "#22c55e";
-    if (v <= 100) return "#eab308";
-    if (v <= 150) return "#f97316";
-    if (v <= 200) return "#ef4444";
-    if (v <= 300) return "#a855f7";
-    return "#b91c1c";
+    if (v <= 50)  return "#22c55e";  // Good
+    if (v <= 100) return "#eab308";  // Moderate
+    if (v <= 200) return "#f97316";  // Sensitive Groups
+    if (v <= 300) return "#ef4444";  // Unhealthy
+    if (v <= 400) return "#9333ea";  // Very Unhealthy
+    return "#7f1d1d";                // Hazardous
   };
+
+  // ─── WRF Meteorological Forecast Map (reference-style) ────────────────
+  // Container dimensions measured via ResizeObserver — NO hardcoded width.
+  // MF_H is fixed; MF_W is set from the actual container clientWidth so the
+  // canvas always fills the full container width on every screen size.
+  const MF_H = 380;
+  const [mfW, setMfW] = useState(520); // updated by ResizeObserver on mount
+  const mfContainerRef = useRef(null);
+
+  // Observe the map container so that canvas/SVG always match its width
+  useEffect(() => {
+    const el = mfContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const w = Math.floor(entry.contentRect.width);
+        if (w > 0) setMfW(w);
+      }
+    });
+    ro.observe(el);
+    // Set initial width immediately
+    const w = Math.floor(el.clientWidth);
+    if (w > 0) setMfW(w);
+    return () => ro.disconnect();
+  }, []);
+
+  // Geographic bounding box for the forecast domain
+  const MF_LAT_MIN = 27.6, MF_LAT_MAX = 29.5;
+  const MF_LON_MIN = 76.3, MF_LON_MAX = 78.4;
+
+  // Convert lat/lon → pixel.
+  // IMPORTANT: mfW (not a constant) is used here so every coordinate
+  // calculation is always in sync with the container's actual width.
+  const mfLonPx = useCallback(
+    (lon) => ((lon - MF_LON_MIN) / (MF_LON_MAX - MF_LON_MIN)) * mfW,
+    [mfW]
+  );
+  const mfLatPx = useCallback(
+    (lat) => (1 - (lat - MF_LAT_MIN) / (MF_LAT_MAX - MF_LAT_MIN)) * MF_H,
+    []
+  );
+
+  // Active forecast parameter tab
+  const [mfParam, setMfParam] = useState("Wind (10m)");
+  const mfTabs = ["Wind (10m)", "Temperature", "PM2.5", "PM10", "O3", "NO2", "PBL Height", "Rel. Humidity"];
+
+  // Per-parameter config: field key, legend label, colour stops, value range
+  const MF_CONFIG = {
+    "Wind (10m)":   { key:"wind_speed_ms", conv: v => v * 3.6, label:"Wind Speed (km/h)", unit:"km/h",
+                      range:[0,30], stops:["#0000ff","#00aaff","#00ffcc","#00ff00","#aaff00","#ffff00","#ffaa00","#ff5500","#ff0000"] },
+    "Temperature":  { key:"temperature_c",  conv: v => v,        label:"Temperature (°C)",  unit:"°C",
+                      range:[18,42], stops:["#313695","#4575b4","#74add1","#abd9e9","#ffffbf","#fdae61","#f46d43","#d73027","#a50026"] },
+    "PM2.5":        { key:"pm25",           conv: v => v,        label:"PM2.5 (µg/m³)",     unit:"µg/m³",
+                      range:[0,300], stops:["#0000cc","#0066ff","#00ccff","#00ff66","#ccff00","#ffcc00","#ff6600","#cc0000","#660000"] },
+    "PM10":         { key:"pm10",           conv: v => v,        label:"PM10 (µg/m³)",      unit:"µg/m³",
+                      range:[0,400], stops:["#0000cc","#0066ff","#00ccff","#00ff66","#ccff00","#ffcc00","#ff6600","#cc0000","#660000"] },
+    "O3":           { key:"o3",             conv: v => v,        label:"O₃ (µg/m³)",        unit:"µg/m³",
+                      range:[0,150], stops:["#313695","#4575b4","#74add1","#e0f3f8","#fee090","#fdae61","#f46d43","#d73027","#a50026"] },
+    "NO2":          { key:"no2",            conv: v => v,        label:"NO₂ (µg/m³)",       unit:"µg/m³",
+                      range:[0,120], stops:["#f7fcf5","#ccebc5","#7bccc4","#2b8cbe","#0868ac","#084081","#081d58","#03071e","#000000"] },
+    "PBL Height":   { key:"boundary_layer_height_m", conv:v=>v,  label:"PBL Height (m)",    unit:"m",
+                      range:[0,2500], stops:["#1a0533","#4b0082","#7b2fbe","#c084fc","#fbbf24","#f97316","#ef4444","#991b1b","#450a0a"] },
+    "Rel. Humidity":{ key:"humidity",       conv: v => v,        label:"Rel. Humidity (%)", unit:"%",
+                      range:[10,100], stops:["#7f4f00","#cc7722","#e6b85c","#ffffcc","#a8ddb5","#43a2ca","#0868ac","#084081","#041029"] },
+  };
+
+  // ── Canvas draw ref ──────────────────────────────────────
+  const mfCanvasRef = useRef(null);
+  const mfStreamRef = useRef(null);
+
+  // ── IDW colour interpolation onto canvas ─────────────────
+  // Accepts live W/H so it always fills the container exactly.
+  const drawMfCanvas = useCallback((canvasEl, rows, param, W, H) => {
+    if (!canvasEl || !rows.length || W <= 0 || H <= 0) return;
+    const cfg = MF_CONFIG[param];
+    if (!cfg) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+
+    // Set canvas backing-store to exact container size
+    canvasEl.width  = W;
+    canvasEl.height = H;
+
+    // Build coordinate helpers scoped to this W/H
+    const lonPx = (lon) => ((lon - MF_LON_MIN) / (MF_LON_MAX - MF_LON_MIN)) * W;
+    const latPx = (lat) => (1 - (lat - MF_LAT_MIN) / (MF_LAT_MAX - MF_LAT_MIN)) * H;
+
+    // Collect station data points in pixel space
+    const pts = rows.map(({ station, current: wrf }) => {
+      const raw = wrf?.[cfg.key];
+      const val = raw != null ? cfg.conv(Number(raw)) : null;
+      return {
+        px: lonPx(Number(station.longitude ?? station.lon)),
+        py: latPx(Number(station.latitude  ?? station.lat)),
+        v: val,
+      };
+    }).filter(p => p.v != null && Number.isFinite(p.v));
+
+    if (!pts.length) return;
+
+    // Colour ramp helpers
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const hexToRgb = hex => {
+      const h = hex.replace("#","");
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    };
+    const stops = cfg.stops.map(hexToRgb);
+    const getColour = (v) => {
+      const [lo, hi] = cfg.range;
+      const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+      const idx = t * (stops.length - 1);
+      const i = Math.min(Math.floor(idx), stops.length - 2);
+      const frac = idx - i;
+      const [r1,g1,b1] = stops[i];
+      const [r2,g2,b2] = stops[i+1];
+      return [lerp(r1,r2,frac)|0, lerp(g1,g2,frac)|0, lerp(b1,b2,frac)|0];
+    };
+
+    // Render at 1/4 resolution then scale up for smoothness
+    const SCALE = 4;
+    const offW = Math.ceil(W / SCALE);
+    const offH = Math.ceil(H / SCALE);
+    const offscreen = document.createElement("canvas");
+    offscreen.width = offW; offscreen.height = offH;
+    const oct = offscreen.getContext("2d");
+    const img = oct.createImageData(offW, offH);
+    const { data } = img;
+
+    for (let py = 0; py < offH; py++) {
+      for (let px = 0; px < offW; px++) {
+        const cx = px * SCALE + SCALE/2;
+        const cy = py * SCALE + SCALE/2;
+        let wSum = 0, vSum = 0;
+        for (const p of pts) {
+          const dx = cx - p.px, dy = cy - p.py;
+          const dist2 = dx*dx + dy*dy;
+          const w = 1 / (dist2 + 400);
+          wSum += w;
+          vSum += w * p.v;
+        }
+        const v = wSum > 0 ? vSum / wSum : cfg.range[0];
+        const [r, g, b] = getColour(v);
+        const i4 = (py * offW + px) * 4;
+        data[i4]   = r;
+        data[i4+1] = g;
+        data[i4+2] = b;
+        data[i4+3] = 220;
+      }
+    }
+    oct.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(offscreen, 0, 0, W, H);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Streamlines — depend on live W/H ─────────────────────
+  const buildStreamlines = useCallback((rows, W, H) => {
+    if (!rows.length || W <= 0 || H <= 0) return [];
+    const lonPx = (lon) => ((lon - MF_LON_MIN) / (MF_LON_MAX - MF_LON_MIN)) * W;
+    const latPx = (lat) => (1 - (lat - MF_LAT_MIN) / (MF_LAT_MAX - MF_LAT_MIN)) * H;
+
+    const pts = rows.map(({ station, current: wrf }) => ({
+      px: lonPx(Number(station.longitude ?? station.lon)),
+      py: latPx(Number(station.latitude  ?? station.lat)),
+      spd: wrf?.wind_speed_ms != null ? Math.min(Number(wrf.wind_speed_ms) * 3.6, 30) : 8,
+      dir: wrf?.wind_direction_deg != null
+        ? (Number(wrf.wind_direction_deg) * Math.PI / 180)
+        : (292 * Math.PI / 180),
+    }));
+
+    const interpolateWind = (x, y) => {
+      let ux = 0, uy = 0, wSum = 0;
+      for (const p of pts) {
+        const dx = x - p.px, dy = y - p.py;
+        const d2 = dx*dx + dy*dy;
+        const w = 1 / (d2 + 900);
+        wSum += w;
+        ux += w * p.spd * Math.sin(p.dir);
+        uy += w * p.spd * (-Math.cos(p.dir));
+      }
+      if (wSum < 1e-9) return [0, 0];
+      return [ux/wSum, uy/wSum];
+    };
+
+    const STEP = 7;
+    const MAX_STEPS = 28;
+    const lines = [];
+
+    for (let gy = 0.08; gy < 0.92; gy += 0.13) {
+      for (let gx = 0.06; gx < 0.94; gx += 0.11) {
+        let x = gx * W;
+        let y = gy * H;
+        const path = [[x, y]];
+        for (let s = 0; s < MAX_STEPS; s++) {
+          const [u1, v1] = interpolateWind(x, y);
+          const mag1 = Math.sqrt(u1*u1+v1*v1);
+          if (mag1 < 0.05) break;
+          const dx1 = (u1/mag1)*STEP, dy1 = (v1/mag1)*STEP;
+          const x2 = x + dx1*0.5, y2 = y + dy1*0.5;
+          const [u2, v2] = interpolateWind(x2, y2);
+          const mag2 = Math.sqrt(u2*u2+v2*v2)||1;
+          x += (u2/mag2)*STEP;
+          y += (v2/mag2)*STEP;
+          if (x < -20 || x > W+20 || y < -20 || y > H+20) break;
+          path.push([x, y]);
+        }
+        if (path.length >= 4) lines.push(path);
+      }
+    }
+    return lines;
+  }, []);
+
+  // Redraw when data, tab, OR container width changes
+  useEffect(() => {
+    if (!mfCanvasRef.current || !network.rows.length || mfW <= 0) return;
+    drawMfCanvas(mfCanvasRef.current, network.rows, mfParam, mfW, MF_H);
+  }, [network.rows, mfParam, drawMfCanvas, mfW]);
+
+  const mfStreamlines = useMemo(() => {
+    if (!network.rows.length || mfW <= 0) return [];
+    return buildStreamlines(network.rows, mfW, MF_H);
+  }, [network.rows, buildStreamlines, mfW]);
+
+  // Dynamic timestamp from the first forecast row
+  const mfTimestamp = useMemo(() => {
+    // Try to get timestamp from the selected station's state.data, or from any network row
+    const ts = state.data?.forecast?.[0]?.timestamp_utc
+      ?? network.rows[0]?.current?.timestamp_utc
+      ?? null;
+    if (!ts) return null;
+    try {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return null;
+      // Format as "DD MMM YYYY, hh:mm AM/PM (IST)"
+      const ist = new Date(d.getTime() + 5.5 * 3600000);
+      return ist.toLocaleString("en-IN", {
+        day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit", hour12: true,
+        timeZone: "Asia/Kolkata",
+      }) + " (IST)";
+    } catch { return null; }
+  }, [state.data, network.rows]);
+
+  const cfg = MF_CONFIG[mfParam];
+  const showStreamlines = mfParam === "Wind (10m)";
 
   // Geographic projection uses station coordinates from /stations.
   // The color at each point uses only the corresponding WRF-Chem AQI.
@@ -2264,6 +4316,7 @@ function WRFChemSection() {
     left: `${Math.max(3, Math.min(97, ((Number(station.longitude ?? station.lon) - mapMinLon) / (mapMaxLon - mapMinLon)) * 100))}%`,
     top: `${Math.max(5, Math.min(95, (1 - (Number(station.latitude ?? station.lat) - mapMinLat) / (mapMaxLat - mapMinLat)) * 100))}%`,
   });
+
 
   return (
     <div className="aero-readable mt-10 mb-6">
@@ -2297,99 +4350,294 @@ function WRFChemSection() {
       </div>
 
       {/* =========================================================
-          WRF-CHEM DATA-DRIVEN MAP
-          Coordinates = backend /stations
-          Color/value = backend /wrf-chem/{station_id}
+          WRF-CHEM METEOROLOGICAL FORECAST MAP
+          Styled after professional atmospheric-science reference.
+          Canvas IDW raster + SVG streamlines + vertical legend.
           ========================================================= */}
-      <div
-        className="rounded-2xl p-4 mb-6"
-        style={{ background: "var(--surface-secondary)", border: "1px solid var(--border)" }}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="rounded-2xl p-5 mb-6" style={{background:"var(--surface)", border:"1px solid var(--border)", boxShadow:"var(--shadow-md)"}}>
+
+        {/* Card header */}
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-sm font-bold text-[var(--text-primary)]">WRF-Chem NCR AQI Map</p>
-            <p className="text-[10px] text-[var(--text-muted)]">Station position from backend · color and AQI from WRF-Chem first forecast hour</p>
+            <h3 className="text-base font-bold text-[var(--text-primary)]">Meteorological Forecast</h3>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{network.rows.length}/{stations.length} stations · WRF-Chem backend</p>
           </div>
-          <span className="text-[10px] font-semibold text-emerald-300">
-            {network.rows.length}/{stations.length} station data points
+          <span className="text-[10px] font-semibold text-emerald-600 px-2.5 py-1.5 rounded-full"
+            style={{background:"rgba(5,150,105,.08)",border:"1px solid rgba(5,150,105,.2)"}}>
+            {network.loading ? `Loading ${network.rows.length}/${stations.length}…` : "WRF-Chem Model"}
           </span>
         </div>
 
-        <div
-          className="relative h-[430px] rounded-xl overflow-hidden"
-          style={{
-            background: "linear-gradient(145deg,#071a2b,#0a2a26 52%,#111827)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: "linear-gradient(rgba(148,163,184,.25) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.25) 1px, transparent 1px)",
-              backgroundSize: "44px 44px",
-            }}
-          />
+        {/* Parameter tabs */}
+        <div className="flex flex-wrap gap-1 mb-4">
+          {mfTabs.map(t => (
+            <button key={t} onClick={() => setMfParam(t)}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap"
+              style={mfParam === t
+                ? {background:"#16a34a", color:"#ffffff", boxShadow:"0 2px 6px rgba(22,163,74,.3)"}
+                : {background:"var(--surface-secondary)", color:"var(--text-secondary)", border:"1px solid var(--border)"}}>
+              {t}
+            </button>
+          ))}
+        </div>
 
-          <div className="absolute left-3 top-3 text-[9px] text-slate-400">
-            Delhi-NCR · WRF-Chem backend
-          </div>
+        {/* Map + vertical legend row */}
+        <div className="flex gap-3 items-start">
 
-          {network.rows.map(({ station, current: wrf }) => {
-            const point = mapPoint(station);
-            const colour = aqiColour(wrf?.aqi);
-            const active = station.station_id === selectedId;
+          {/* ── Map canvas area — ref attached for ResizeObserver ── */}
+          <div ref={mfContainerRef}
+            className="relative rounded-xl overflow-hidden flex-1"
+            style={{height: MF_H, background:"#1a2744", minWidth:0}}>
 
-            return (
-              <button
-                key={`wrf-map-${station.station_id}`}
-                onClick={() => setSelectedId(station.station_id)}
-                title={`${station.name} · AQI ${formatValue(wrf?.aqi)}`}
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full group"
-                style={{ left: point.left, top: point.top }}
-              >
-                <span
-                  className="flex items-center justify-center rounded-full"
+            {/* Raster field canvas — sized to mfW×MF_H, always full-width */}
+            <canvas ref={mfCanvasRef}
+              className="absolute inset-0"
+              style={{
+                width: "100%", height: "100%",
+                opacity: network.rows.length ? 1 : 0, transition:"opacity .4s"
+              }}
+              width={mfW} height={MF_H}/>
+
+            {/* Dark base when no data */}
+            {!network.rows.length && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                {network.loading
+                  ? <div className="flex items-center gap-2 px-4 py-2 rounded-lg" style={{background:"rgba(255,255,255,.9)"}}>
+                      <RefreshCw size={13} className="animate-spin text-emerald-600"/>
+                      <span className="text-xs font-semibold text-[var(--text-secondary)]">Loading WRF-Chem data…</span>
+                    </div>
+                  : <div className="text-center px-5">
+                      <p className="text-sm font-semibold text-slate-300">No WRF-Chem data</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Ensure the backend is running</p>
+                    </div>
+                }
+              </div>
+            )}
+
+            {/* ── SVG streamlines (wind only) ── */}
+            {showStreamlines && mfStreamlines.length > 0 && (
+              <svg ref={mfStreamRef}
+                className="absolute inset-0 pointer-events-none"
+                width={mfW} height={MF_H}
+                style={{overflow:"hidden"}}>
+                <defs>
+                  {/* Arrow head */}
+                  <marker id="mf-arr" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
+                    <polygon points="0 0,4 2,0 4" fill="rgba(220,240,255,.85)"/>
+                  </marker>
+                  {/* Fade mask so streamlines soften at edges */}
+                  <radialGradient id="mf-fade" cx="50%" cy="50%" r="50%">
+                    <stop offset="40%"  stopColor="white" stopOpacity="1"/>
+                    <stop offset="100%" stopColor="white" stopOpacity="0"/>
+                  </radialGradient>
+                  <mask id="mf-mask">
+                    <rect width={mfW} height={MF_H} fill="url(#mf-fade)"/>
+                  </mask>
+                </defs>
+                <g mask="url(#mf-mask)">
+                  {mfStreamlines.map((path, li) => {
+                    if (path.length < 2) return null;
+                    // Build smooth cubic bezier path
+                    let d = `M ${path[0][0].toFixed(1)} ${path[0][1].toFixed(1)}`;
+                    for (let i = 1; i < path.length; i++) {
+                      const [x, y] = path[i];
+                      d += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+                    }
+                    // Place arrow at 60% along the path
+                    const midIdx = Math.floor(path.length * 0.6);
+                    const [ax, ay] = path[midIdx] ?? path[path.length - 1];
+                    const [bx, by] = path[Math.min(midIdx + 1, path.length - 1)];
+                    const angle = Math.atan2(by - ay, bx - ax) * 180 / Math.PI;
+                    return (
+                      <g key={`sl-${li}`}>
+                        <path d={d} fill="none"
+                          stroke="rgba(200,235,255,.6)" strokeWidth="1.1"
+                          strokeLinecap="round"/>
+                        {/* Arrow head marker */}
+                        <polygon
+                          points={`${ax},${ay} ${ax-6},${ay-3} ${ax-6},${ay+3}`}
+                          fill="rgba(220,240,255,.75)"
+                          transform={`rotate(${angle},${ax},${ay})`}/>
+                      </g>
+                    );
+                  })}
+                </g>
+              </svg>
+            )}
+
+            {/* ── NCR boundary (hand-tuned polygon approximation) ── */}
+            <svg className="absolute inset-0 pointer-events-none" width={mfW} height={MF_H}
+              style={{overflow:"hidden", opacity:.7}}>
+              {(() => {
+                // Approximate NCR boundary as a closed polygon through key boundary points
+                const bPts = [
+                  [77.05,29.30],[77.30,29.28],[77.55,29.22],[77.70,29.08],
+                  [77.75,28.90],[77.72,28.65],[77.68,28.38],[77.55,28.22],
+                  [77.30,28.05],[77.05,27.92],[76.80,28.00],[76.65,28.18],
+                  [76.60,28.40],[76.65,28.65],[76.75,28.95],[76.85,29.15],
+                ];
+                const pts = bPts.map(([ln, lt]) =>
+                  `${mfLonPx(ln).toFixed(1)},${mfLatPx(lt).toFixed(1)}`).join(" ");
+                return (
+                  <polygon points={pts}
+                    fill="none"
+                    stroke="rgba(255,255,255,.55)"
+                    strokeWidth="1.4"
+                    strokeDasharray="6 4"/>
+                );
+              })()}
+            </svg>
+
+            {/* ── City labels ── */}
+            {[
+              {name:"Delhi",      lat:28.6139, lon:77.2090, dx:0,  dy:-8},
+              {name:"Gurugram",   lat:28.4595, lon:77.0266, dx:-6, dy:0},
+              {name:"Faridabad",  lat:28.4089, lon:77.3178, dx:0,  dy:10},
+              {name:"Noida",      lat:28.5355, lon:77.3910, dx:6,  dy:0},
+              {name:"Ghaziabad",  lat:28.6692, lon:77.4538, dx:6,  dy:0},
+              {name:"Sonipat",    lat:28.9931, lon:77.0151, dx:-6, dy:0},
+              {name:"Panipat",    lat:29.3909, lon:76.9635, dx:0,  dy:-8},
+              {name:"Meerut",     lat:28.9845, lon:77.7064, dx:6,  dy:0},
+              {name:"Rohtak",     lat:28.8955, lon:76.6066, dx:-6, dy:0},
+            ].map(c => {
+              const cx = mfLonPx(c.lon);
+              const cy = mfLatPx(c.lat);
+              if (cx < 0 || cx > mfW || cy < 0 || cy > MF_H) return null;
+              return (
+                <div key={c.name}
+                  className="absolute pointer-events-none select-none"
                   style={{
-                    width: active ? 38 : 28,
-                    height: active ? 38 : 28,
-                    background: `${colour}33`,
-                    border: `2px solid ${colour}`,
-                    boxShadow: `0 0 18px ${colour}88`,
-                  }}
-                >
-                  <span className="text-[8px] font-black text-slate-100">
-                    {Number.isFinite(Number(wrf?.aqi)) ? Math.round(Number(wrf.aqi)) : "—"}
+                    left: cx + c.dx,
+                    top:  cy + c.dy,
+                    transform: "translate(-50%,-50%)",
+                  }}>
+                  <span style={{
+                    fontSize:11, fontWeight:700,
+                    color:"#ffffff",
+                    textShadow:"0 0 6px rgba(0,0,0,.95), 1px 1px 0 rgba(0,0,0,.8), -1px -1px 0 rgba(0,0,0,.8)",
+                    letterSpacing:".01em",
+                  }}>{c.name}</span>
+                </div>
+              );
+            })}
+
+            {/* ── Station dots (subtle, no labels) ── */}
+            {network.rows.map(({ station }) => {
+              const px = mfLonPx(Number(station.longitude ?? station.lon));
+              const py = mfLatPx(Number(station.latitude  ?? station.lat));
+              if (px < 0 || px > mfW || py < 0 || py > MF_H) return null;
+              const isActive = station.station_id === selectedId;
+              return (
+                <button
+                  key={`mf-dot-${station.station_id}`}
+                  onClick={() => setSelectedId(station.station_id)}
+                  className="absolute group"
+                  style={{left: px, top: py, transform:"translate(-50%,-50%)", zIndex:10}}>
+                  <span style={{
+                    display:"block",
+                    width: isActive ? 10 : 6,
+                    height: isActive ? 10 : 6,
+                    borderRadius:"50%",
+                    background: isActive ? "#ffffff" : "rgba(255,255,255,.7)",
+                    border: isActive ? "2px solid rgba(0,0,0,.5)" : "1px solid rgba(0,0,0,.3)",
+                    boxShadow: isActive ? "0 0 8px rgba(255,255,255,.8)" : "none",
+                    transition:"all .15s",
+                  }}/>
+                  {/* Hover tooltip — station name only, never permanent label */}
+                  <span className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:flex whitespace-nowrap pointer-events-none"
+                    style={{
+                      background:"rgba(15,23,42,.92)",
+                      color:"#f1f5f9",
+                      fontSize:10, fontWeight:600,
+                      padding:"3px 8px",
+                      borderRadius:6,
+                      boxShadow:"0 2px 8px rgba(0,0,0,.5)",
+                      zIndex:50,
+                    }}>
+                    {station.name}
                   </span>
-                </span>
-                <span
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block whitespace-nowrap rounded px-2 py-1 text-[8px] font-semibold text-slate-100"
-                  style={{ background: "rgba(2,6,23,.94)" }}
-                >
-                  {station.name}
-                </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
 
-          {network.loading && (
-            <div className="absolute right-3 top-3 rounded-lg px-2 py-1 text-[9px] text-slate-200" style={{ background: "rgba(2,6,23,.8)" }}>
-              Loading {network.rows.length}/{stations.length}…
+            {/* ── Scale bar ── */}
+            <div className="absolute bottom-9 left-3 flex items-center gap-1 pointer-events-none"
+              style={{zIndex:20}}>
+              <div style={{
+                width:60, height:4,
+                background:"linear-gradient(90deg,#fff 0%,#fff 50%,transparent 50%,transparent 100%)",
+                backgroundSize:"10px 4px",
+                border:"1px solid rgba(255,255,255,.6)",
+                borderRadius:2,
+              }}/>
+              <span style={{fontSize:10, fontWeight:700, color:"#fff",
+                textShadow:"0 1px 4px rgba(0,0,0,.9)"}}>20 km</span>
             </div>
-          )}
 
-          {!network.loading && !network.rows.length && (
-            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-300">
-              No WRF-Chem backend rows returned.
-            </div>
-          )}
-
-          <div className="absolute bottom-3 left-3 flex flex-wrap gap-3 text-[9px] text-slate-200 rounded-lg px-2.5 py-2" style={{ background: "rgba(2,6,23,.88)" }}>
-            {[['0–50', '#22c55e'], ['51–100', '#eab308'], ['101–150', '#f97316'], ['151–200', '#ef4444'], ['201–300', '#a855f7'], ['301+', '#b91c1c']].map(([label, colour]) => (
-              <span key={label} className="flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full" style={{ background: colour }} />{label}
+            {/* ── Valid timestamp overlay ── */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none"
+              style={{zIndex:20}}>
+              <span style={{
+                background:"rgba(10,18,40,.82)",
+                color:"#f0f4f8",
+                fontSize:11, fontWeight:600,
+                padding:"4px 14px",
+                borderRadius:8,
+                border:"1px solid rgba(255,255,255,.15)",
+                backdropFilter:"blur(4px)",
+                letterSpacing:".01em",
+                whiteSpace:"nowrap",
+              }}>
+                {mfTimestamp
+                  ? `Valid: ${mfTimestamp}`
+                  : "Valid: timestamp from backend"}
               </span>
-            ))}
+            </div>
           </div>
+
+          {/* ── Vertical colour legend ── */}
+          <div className="flex-shrink-0 flex flex-col items-start gap-1 pl-1" style={{width:80}}>
+            <p className="text-[10px] font-semibold text-[var(--text-secondary)] mb-1 leading-tight">
+              {cfg?.label?.replace(/ *\(.*\)/, "") ?? ""}
+              <br/>
+              <span className="font-normal text-[var(--text-muted)]">({cfg?.unit})</span>
+            </p>
+            {/* Gradient bar */}
+            <div style={{
+              width:18, height:180,
+              borderRadius:4, border:"1px solid rgba(0,0,0,.12)",
+              background: `linear-gradient(to bottom, ${[...(cfg?.stops ?? [])].reverse().join(",")})`,
+              flexShrink:0,
+            }}/>
+            {/* Tick labels */}
+            <div className="relative" style={{height:180, width:18}}>
+              {[0,.2,.4,.6,.8,1].map((t,i) => {
+                const [lo,hi] = cfg?.range ?? [0,1];
+                const v = hi - t*(hi-lo);
+                return (
+                  <span key={i}
+                    className="absolute text-[10px] font-semibold text-[var(--text-secondary)]"
+                    style={{
+                      top: `${t * 100}%`,
+                      left: 24,
+                      transform:"translateY(-50%)",
+                      whiteSpace:"nowrap",
+                    }}>
+                    {Number.isFinite(v) ? Math.round(v) : ""}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-center gap-5 mt-3 pt-3 border-t border-[var(--border)]">
+          <span className="text-[11px] font-semibold text-[var(--text-muted)]">Simulated/Prototype Data</span>
+          <span className="text-[var(--border)]">|</span>
+          <span className="text-[11px] text-[var(--text-muted)]">WRF-Chem Backend</span>
+          <span className="text-[var(--border)]">|</span>
+          <span className="text-[11px] text-[var(--text-muted)]">{network.rows.length}/{stations.length} Stations</span>
         </div>
       </div>
 
@@ -2410,38 +4658,52 @@ function WRFChemSection() {
 
         {network.rows.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-[10px]">
+            <div className="overflow-x-auto max-h-[440px] overflow-y-auto">
+            <table className="wrf-table">
               <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--border)]">
+                <tr>
                   {['#', 'Station', 'Station ID', 'AQI', 'PM2.5', 'PM10', 'O₃', 'NO₂', 'Temp', 'Wind', 'PBL', 'Inversion'].map(label => (
-                    <th key={label} className="px-2 py-3 font-semibold">{label}</th>
+                    <th key={label}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {network.rows.map(({ station, current: wrf }, index) => (
-                  <tr
-                    key={`wrf-row-${station.station_id}`}
-                    onClick={() => setSelectedId(station.station_id)}
-                    className="cursor-pointer border-b border-[var(--border)] hover:bg-white/[.025]"
-                    style={{ background: station.station_id === selectedId ? "rgba(34,211,238,.06)" : "transparent" }}
-                  >
-                    <td className="px-2 py-3 text-[var(--text-muted)]">{index + 1}</td>
-                    <td className="px-2 py-3 font-semibold text-[var(--text-primary)]">{station.name || station.station_id}</td>
-                    <td className="px-2 py-3 text-[var(--text-muted)]">{station.station_id}</td>
-                    <td className="px-2 py-3 font-black" style={{ color: aqiColour(wrf?.aqi) }}>{formatValue(wrf?.aqi)}</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.pm25)}</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.pm10)}</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.o3)}</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.no2)}</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.temperature_c)}°C</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.wind_speed_ms)} m/s</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{formatValue(wrf?.boundary_layer_height_m)} m</td>
-                    <td className="px-2 py-3 text-[var(--text-secondary)]">{wrf?.inversion_flag ? "Yes" : "No"}</td>
-                  </tr>
-                ))}
+                {network.rows.map(({ station, current: wrf }, index) => {
+                  const aqiVal = wrf?.aqi;
+                  const aqiC = aqiColour(aqiVal);
+                  return (
+                    <tr
+                      key={`wrf-row-${station.station_id}`}
+                      onClick={() => setSelectedId(station.station_id)}
+                      className={`cursor-pointer ${station.station_id === selectedId ? "selected" : ""}`}
+                    >
+                      <td className="text-[var(--text-muted)]">{index + 1}</td>
+                      <td className="font-semibold text-[var(--text-primary)]">{station.name || station.station_id}</td>
+                      <td className="text-[var(--text-secondary)] font-mono text-[10px]">{station.station_id}</td>
+                      <td>
+                        <span className="aqi-badge text-white" style={{background: aqiC, minWidth:48}}>
+                          {Number.isFinite(Number(aqiVal)) ? Math.round(Number(aqiVal)) : "—"}
+                        </span>
+                      </td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(wrf?.pm25)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(wrf?.pm10)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(wrf?.o3)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(wrf?.no2)}</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(wrf?.temperature_c)}°C</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(wrf?.wind_speed_ms)} m/s</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(wrf?.boundary_layer_height_m)} m</td>
+                      <td>
+                        <span className={`aqi-badge ${wrf?.inversion_flag ? "text-orange-700" : "text-[var(--text-muted)]"}`}
+                          style={wrf?.inversion_flag ? {background:"rgba(234,88,12,.1)",border:"1px solid rgba(234,88,12,.2)"} : {background:"var(--surface-secondary)",border:"1px solid var(--border)"}}>
+                          {wrf?.inversion_flag ? "Active" : "None"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
@@ -2540,27 +4802,35 @@ function WRFChemSection() {
               </button>
             </div>
 
-            <table className="w-full min-w-[1000px] text-[10px]">
+            <table className="wrf-table">
               <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--border)]">
-                  {['Forecast hour', 'AQI', 'PM2.5', 'PM10', 'O3', 'NO2', 'Temp', 'Wind', 'BLH', 'Inversion'].map(label => <th key={label} className="px-2 py-2 font-semibold">{label}</th>)}
+                <tr>
+                  {['Hour', 'AQI', 'PM2.5', 'PM10', 'O3', 'NO2', 'Temp', 'Wind', 'PBL', 'Inversion'].map(label => <th key={label}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {(showAll ? rows : rows.slice(0, 12)).map((row, index) => (
-                  <tr key={`${row.station_id}-${row.forecast_hour}-${index}`} className="border-b border-[var(--border)] text-[var(--text-secondary)]">
-                    <td className="px-2 py-2">H+{Number.isFinite(Number(row.forecast_hour)) ? Number(row.forecast_hour) : index}</td>
-                    <td className="px-2 py-2">{formatValue(row.aqi)}</td>
-                    <td className="px-2 py-2">{formatValue(row.pm25)}</td>
-                    <td className="px-2 py-2">{formatValue(row.pm10)}</td>
-                    <td className="px-2 py-2">{formatValue(row.o3)}</td>
-                    <td className="px-2 py-2">{formatValue(row.no2)}</td>
-                    <td className="px-2 py-2">{formatValue(row.temperature_c)}°C</td>
-                    <td className="px-2 py-2">{formatValue(row.wind_speed_ms)} m/s</td>
-                    <td className="px-2 py-2">{formatValue(row.boundary_layer_height_m)} m</td>
-                    <td className="px-2 py-2">{row.inversion_flag ? "Yes" : "No"}</td>
-                  </tr>
-                ))}
+                {(showAll ? rows : rows.slice(0, 12)).map((row, index) => {
+                  const aqiV = row.aqi;
+                  const aqiC = aqiColour(aqiV);
+                  return (
+                    <tr key={`${row.station_id}-${row.forecast_hour}-${index}`}>
+                      <td className="font-mono text-[var(--text-secondary)]">H+{Number.isFinite(Number(row.forecast_hour)) ? Number(row.forecast_hour) : index}</td>
+                      <td>
+                        <span className="aqi-badge text-white" style={{background:aqiC,minWidth:44}}>
+                          {Number.isFinite(Number(aqiV)) ? Math.round(Number(aqiV)) : "—"}
+                        </span>
+                      </td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(row.pm25)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(row.pm10)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(row.o3)}</td>
+                      <td className="text-[var(--text-primary)] font-medium">{formatValue(row.no2)}</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(row.temperature_c)}°C</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(row.wind_speed_ms)} m/s</td>
+                      <td className="text-[var(--text-primary)]">{formatValue(row.boundary_layer_height_m)} m</td>
+                      <td className="text-[var(--text-secondary)]">{row.inversion_flag ? "Active" : "None"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

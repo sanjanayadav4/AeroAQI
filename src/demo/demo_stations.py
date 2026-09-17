@@ -893,23 +893,48 @@ def _aqi_category(aqi: int) -> str:
 
 
 def _aqi_info(aqi: int) -> dict:
-    """Return AQI label, color and emoji."""
+    aqi = int(max(0, min(500, aqi)))
+
     if aqi <= 50:
-        return {"label": "Good", "color": "#22c55e", "emoji": "🌿"}
+        return {
+            "label": "Good",
+            "color": "#22c55e",
+            "emoji": "🌿",
+        }
+
     if aqi <= 100:
-        return {"label": "Moderate", "color": "#eab308", "emoji": "🙂"}
-    if aqi <= 150:
+        return {
+            "label": "Moderate",
+            "color": "#eab308",
+            "emoji": "🙂",
+        }
+
+    if aqi <= 200:
         return {
             "label": "Unhealthy for Sensitive Groups",
             "color": "#f97316",
             "emoji": "😷",
         }
-    if aqi <= 200:
-        return {"label": "Unhealthy", "color": "#ef4444", "emoji": "😟"}
-    if aqi <= 300:
-        return {"label": "Very Unhealthy", "color": "#9333ea", "emoji": "😨"}
-    return {"label": "Hazardous", "color": "#7f1d1d", "emoji": "☠️"}
 
+    if aqi <= 300:
+        return {
+            "label": "Unhealthy",
+            "color": "#ef4444",
+            "emoji": "😟",
+        }
+
+    if aqi <= 400:
+        return {
+            "label": "Very Unhealthy",
+            "color": "#9333ea",
+            "emoji": "😨",
+        }
+
+    return {
+        "label": "Hazardous",
+        "color": "#7f1d1d",
+        "emoji": "☠️",
+    }
 
 AQI_BREAKPOINTS = {
     "pm25": [
@@ -1000,14 +1025,14 @@ def _station_seed(index: int, station: dict) -> random.Random:
 
 
 def _category_layout() -> dict:
-    """Assign all 79 stations to the six requested display categories."""
+    """Assign all 79 stations across the complete CPCB AQI range."""
     categories = (
-        ["Good"] * 7
-        + ["Moderate"] * 17
-        + ["Unhealthy for Sensitive Groups"] * 29
-        + ["Unhealthy"] * 15
-        + ["Very Unhealthy"] * 9
-        + ["Hazardous"] * 2
+        ["Good"] * 8
+        + ["Satisfactory"] * 14
+        + ["Moderately Polluted"] * 22
+        + ["Poor"] * 16
+        + ["Very Poor"] * 12
+        + ["Severe"] * 7
     )
 
     if len(categories) != len(STATIONS):
@@ -1027,14 +1052,13 @@ def _category_layout() -> dict:
 _CATEGORY_LAYOUT = _category_layout()
 
 _CATEGORY_RANGES = {
-    "Good": (25, 50),
-    "Moderate": (51, 100),
-    "Unhealthy for Sensitive Groups": (101, 150),
-    "Unhealthy": (151, 200),
-    "Very Unhealthy": (201, 300),
-    "Hazardous": (301, 500),
+    "Good": (0, 50),
+    "Satisfactory": (51, 100),
+    "Moderately Polluted": (101, 200),
+    "Poor": (201, 300),
+    "Very Poor": (301, 400),
+    "Severe": (401, 500),
 }
-
 
 def _generate_readings(index: int, station: dict) -> dict:
     """Generate one coupled prototype observation for a station."""

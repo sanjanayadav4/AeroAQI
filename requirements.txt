@@ -17,6 +17,10 @@ xgboost==3.4.1
 scikit-learn==1.9.0
 shap==0.52.0
 joblib==1.6.0
+
+# ---AI/Gemini ---
+google-genai
+
 # --- Data handling ---
 pandas==2.2.2
 numpy==2.2.4

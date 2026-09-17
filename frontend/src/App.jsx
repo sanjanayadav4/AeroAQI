@@ -390,7 +390,7 @@ function Hero() {
 
       {/* Background image with overlay */}
       <div className="absolute inset-0">
-        <img src="/hero.png" alt="India Gate, Delhi"
+        <img src="/hero.jpeg" alt="India Gate, Delhi"
           className="w-full h-full object-cover object-center aero-hero-image" />
           
         {/* Dynamic Overlays: opacity reduces slightly on hover to reveal image */}
@@ -2445,7 +2445,7 @@ function AuthScreen({ onAuthenticated }) {
     <AuthMotionBackdrop/>
     <div className="relative z-10 w-full max-w-6xl grid lg:grid-cols-[1.05fr_.95fr] rounded-[30px] overflow-hidden" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-float)",backdropFilter:"blur(24px)"}}>
       <section className="relative hidden lg:flex min-h-[720px] p-10 xl:p-12 flex-col justify-between overflow-hidden">
-        <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover auth-hero-image" style={{opacity:.78}}/>
+        <img src="/hero.jpeg" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover auth-hero-image" style={{opacity:.78}}/>
         <div className="absolute inset-0" style={{background:"linear-gradient(90deg,rgba(2,8,23,.72),rgba(2,8,23,.28) 58%,rgba(2,8,23,.12)),linear-gradient(180deg,rgba(2,8,23,.10),rgba(2,8,23,.52))"}}/>
         <div className="relative z-10">
           <AeroBrand/>
@@ -3027,7 +3027,7 @@ function DashboardPage({ navigate }) {
   const s=slides[slide];
   return <>
     <section className="relative overflow-hidden rounded-3xl min-h-[510px]" style={{background:"var(--surface)",border:"1px solid var(--border)",boxShadow:"var(--shadow-float)"}}>
-      <img src="/hero.png" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover transition-all duration-1000" style={{opacity:.9,filter:"brightness(1.05) saturate(1.2) contrast(1.06)"}}/>
+      <img src="/hero.jpeg" alt="India Gate, Delhi" className="absolute inset-0 w-full h-full object-cover transition-all duration-1000" style={{opacity:.9,filter:"brightness(1.05) saturate(1.2) contrast(1.06)"}}/>
       <div className="absolute inset-0" style={{background:"linear-gradient(90deg,rgba(248,250,252,.9) 0%,rgba(248,250,252,.68) 34%,rgba(248,250,252,.12) 72%,rgba(248,250,252,.38) 100%)"}}/>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,rgba(34,197,94,.06),transparent_32%),linear-gradient(180deg,transparent,var(--surface-secondary))]"/>
       <div className="relative z-10 p-6 sm:p-9 lg:p-10 max-w-[720px] min-h-[510px] flex flex-col justify-center">

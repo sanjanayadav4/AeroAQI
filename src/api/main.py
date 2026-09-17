@@ -144,6 +144,9 @@ def create_app() -> FastAPI:
         "http://127.0.0.1:5175",
         "http://127.0.0.1:5176",
         "http://127.0.0.1:5177",
+
+        #Vercel production frontend
+        "https://aero-aqi.vercel.app",
     ]
 
     raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
